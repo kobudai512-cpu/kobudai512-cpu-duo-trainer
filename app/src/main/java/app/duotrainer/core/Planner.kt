@@ -8,6 +8,8 @@ data class Question(
     val mode: StudyMode,
     val sentence: Sentence? = null,
     val word: Word? = null,
+    /** 同じ回の中での「もう一度」（苦手にした直後の再確認）。復習予定は変えない。 */
+    val relearn: Boolean = false,
 ) {
     val section: Int get() = sentence?.section ?: word?.section ?: 0
 }
@@ -71,7 +73,7 @@ class Planner(
                 (news + due + rest).take(size)
             }
         }
-        return list.map { s -> Question(Keys.sentence(s.id), mode, sentence = s) }
+        return list.map { s -> Question(Keys.forSentence(mode, s.id), mode, sentence = s) }
     }
 
     private fun buildWords(scope: Scope, size: Int): List<Question> {

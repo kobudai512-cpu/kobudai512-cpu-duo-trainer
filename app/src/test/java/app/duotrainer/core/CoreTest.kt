@@ -63,18 +63,37 @@ class CoreTest {
         assertTrue(r2.parts.any { it.kind == TextUtil.DiffKind.MISSING && it.text == "up" })
     }
 
-    @Test fun srsIntervals() {
-        val today = 100L
-        val a = Srs.review(null, Rating.WEAK, Confidence.MID, today)
-        assertEquals(101, a.due)
-        val b = Srs.review(a, Rating.GOOD, Confidence.MID, 101)
-        assertEquals(101 + 3, b.due)
-        val c = Srs.review(b, Rating.GOOD, Confidence.MID, 104)
-        assertEquals(104 + 7, c.due)
-        val m = Srs.review(null, Rating.MASTERED, Confidence.HIGH, today)
-        assertTrue(m.due - today >= 7)
-        val low = Srs.review(b, Rating.GOOD, Confidence.LOW, 104)
-        assertTrue(low.due < c.due)
+    @Test fun srsGrowsLittleByLittle() {
+        // 毎回「得意」: 1 日 → 3 日 → 約 1 週間 → 約 2〜3 週間 → 約 1〜2 か月
+        var p: Progress? = null
+        var day = 0L
+        val gaps = mutableListOf<Long>()
+        repeat(5) {
+            val n = Srs.review(p, Rating.GOOD, Confidence.MID, day)
+            gaps += n.due - day; day = n.due; p = n
+        }
+        assertEquals(listOf(1L, 3L), gaps.take(2))
+        assertTrue(gaps[2] in 6L..9L)
+        assertTrue(gaps.zipWithNext().all { (a, b) -> b > a })
+        assertTrue(gaps[4] in 30L..80L)
+    }
+
+    @Test fun srsWeakResetsAndSlowsDown() {
+        val good = Srs.review(Srs.review(null, Rating.GOOD, Confidence.MID, 0), Rating.GOOD, Confidence.MID, 1)
+        val weak = Srs.review(good, Rating.WEAK, Confidence.MID, 4)
+        assertEquals(5, weak.due)
+        assertTrue(weak.ease < good.ease)
+        // 苦手のあと思い出せたら 3 日後（いきなり長くはしない）
+        assertEquals(8, Srs.review(weak, Rating.GOOD, Confidence.MID, 5).due)
+        val low = Srs.review(good, Rating.GOOD, Confidence.LOW, 4)
+        val mid = Srs.review(good, Rating.GOOD, Confidence.MID, 4)
+        val mastered = Srs.review(good, Rating.MASTERED, Confidence.HIGH, 4)
+        assertTrue(low.due < mid.due && mid.due < mastered.due)
+    }
+
+    @Test fun srsReadsOldRecords() {
+        val old = Progress(stage = 2, due = 10, last = Rating.GOOD, reps = 2)
+        assertTrue(Srs.review(old, Rating.GOOD, Confidence.MID, 10).due - 10 >= 14)
     }
 
     @Test fun interleaveAlternatesSections() {
@@ -89,7 +108,10 @@ class CoreTest {
         val deck = DeckParser.parse(sample)
         val fresh = Planner(deck, emptyMap(), 0).build(Scope.Today, StudyMode.FREE, 10, 10)
         assertTrue(fresh.isNotEmpty())
-        assertTrue(fresh.all { it.mode == StudyMode.FREE })
+        assertTrue(fresh.all { it.mode == StudyMode.FREE && it.key.startsWith("s:") })
+        // 和文英訳以外は練習用の記録に分ける（「覚えた」に影響しない）
+        val cloze = Planner(deck, emptyMap(), 0).build(Scope.Section(1), StudyMode.CLOZE, 10, 10)
+        assertTrue(cloze.all { it.key.startsWith("p:CLOZE:") })
     }
 
     @Test fun streakCounts() {

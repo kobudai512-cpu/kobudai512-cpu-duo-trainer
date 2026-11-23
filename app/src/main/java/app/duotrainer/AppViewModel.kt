@@ -32,7 +32,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 /** 学習セッション（1 回分の出題）。 */
@@ -167,7 +169,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             is Scope.Section -> "Section ${scope.section}"
         }
         if (scope is Scope.Section) updateUser { it.copy(lastSection = scope.section) }
+        if (mode.isTranslation) updateUser { it.copy(translationMode = mode) }
         _state.update { it.copy(session = Session(title, qs, scope = scope, mode = mode)) }
+        prefetchAudio(qs)
+    }
+
+    /** 出題するセクションの CD 音声を先に解析しておく（再生の待ち時間をなくす）。 */
+    private fun prefetchAudio(qs: List<Question>) {
+        if (_state.value.user.settings.audioSource != AudioSource.CD) return
+        val sections = qs.mapNotNull { it.sentence?.section }.distinct()
+        viewModelScope.launch { sections.forEach { sec -> runCatching { segments(sec) } } }
     }
 
     fun endSession() {
@@ -182,12 +193,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val spent = ((now - session.lastAnswerAt) / 1000).coerceIn(1, 180)
         val day = today
         updateUser { u ->
-            val old = u.progress[q.key]
-            var next = Srs.review(old, rating, confidence, day)
-            if (q.mode == StudyMode.PUZZLE) next = next.copy(puzzleDone = true)
+            // その回の中での「もう一度」は確認だけ。復習予定（明日）は変えない。
+            val progress = if (q.relearn) u.progress
+            else u.progress + (q.key to Srs.review(u.progress[q.key], rating, confidence, day))
             val log = u.days[day.toString()] ?: DayLog()
             u.copy(
-                progress = u.progress + (q.key to next),
+                progress = progress,
                 days = u.days + (day.toString() to log.copy(
                     seconds = log.seconds + spent,
                     answered = log.answered + 1,
@@ -196,27 +207,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         player.stop()
+        // 苦手にした和文英訳は、忘却曲線の「直後の急な忘れ」に合わせて、数問あとにもう一度出す
+        val questions = if (rating == Rating.WEAK && q.mode.isTranslation && !q.relearn) {
+            val at = (session.index + 1 + RELEARN_GAP).coerceAtMost(session.questions.size)
+            session.questions.toMutableList().apply { add(at, q.copy(relearn = true)) }
+        } else session.questions
         _state.update {
             it.copy(session = session.copy(
+                questions = questions,
                 index = session.index + 1,
-                results = session.results + (q to rating),
+                results = if (q.relearn) session.results else session.results + (q to rating),
                 lastAnswerAt = now,
             ))
         }
     }
 
+    private companion object { const val RELEARN_GAP = 4 }
+
     /** 結果画面から「苦手だった問題だけもう一度」。 */
     fun retryWeak() {
         val s = _state.value.session ?: return
-        val weak = s.results.filter { it.second == Rating.WEAK }.map { (q, _) ->
-            if (q.mode == StudyMode.PUZZLE) q.copy(mode = StudyMode.FREE) else q
-        }
+        val weak = s.results.filter { it.second == Rating.WEAK }.map { (q, _) -> q.copy(relearn = true) }
         if (weak.isEmpty()) { endSession(); return }
         _state.update { it.copy(session = Session("苦手をもう一度", weak.shuffled(), scope = Scope.Weak, mode = s.mode)) }
     }
 
     fun preview(q: Question, rating: Rating, confidence: Confidence?): String =
-        Srs.preview(_state.value.user.progress[q.key], rating, confidence)
+        if (q.relearn) "予定は明日のまま" else Srs.preview(_state.value.user.progress[q.key], rating, confidence)
 
     // ---------- 音声 ----------
 
@@ -232,9 +249,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (st.audioSource == AudioSource.TTS || track == null) {
             player.speak(s.en, sp); return
         }
+        player.stop()
         segJob?.cancel()
         segJob = viewModelScope.launch {
-            val seg = runCatching { segmentFor(s) }.getOrNull()
+            val seg = try {
+                segmentFor(s)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e // 次の再生に切り替わった：ここでは何も鳴らさない
+            } catch (e: Exception) {
+                null
+            }
+            ensureActive()
             if (seg == null) player.speak(s.en, sp)
             else player.playTrack(Uri.parse(track), seg, sp)
         }
@@ -252,7 +277,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** セクション音声を 1 文ずつに分けた結果（キャッシュあり）。 */
-    suspend fun segments(section: Int, force: Boolean = false): List<Segment>? {
+    private val segLock = kotlinx.coroutines.sync.Mutex()
+
+    suspend fun segments(section: Int, force: Boolean = false): List<Segment>? = segLock.withLock {
+        segmentsLocked(section, force)
+    }
+
+    private suspend fun segmentsLocked(section: Int, force: Boolean): List<Segment>? {
         val user = _state.value.user
         val deck = _state.value.deck ?: return null
         val track = user.tracks[section.toString()] ?: return null

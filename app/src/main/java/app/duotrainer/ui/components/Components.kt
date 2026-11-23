@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Hearing
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Spellcheck
@@ -50,6 +51,7 @@ import app.duotrainer.ui.theme.StatusPalette
 val StudyMode.icon: ImageVector
     get() = when (this) {
         StudyMode.FREE -> Icons.Rounded.Edit
+        StudyMode.SELF -> Icons.Rounded.Psychology
         StudyMode.CLOZE -> Icons.Rounded.Spellcheck
         StudyMode.PUZZLE -> Icons.Rounded.Extension
         StudyMode.DICTATION -> Icons.Rounded.Hearing

@@ -12,6 +12,17 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -170,6 +181,7 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Pill(q.mode.label, q.mode.icon)
                 Pill("Section ${q.section}" + (q.sentence?.let { " · No.${it.id}" } ?: ""))
+                if (q.relearn) Pill("もう一度")
             }
 
             if (session.mixedSections && settings.interleaveHint && !hintClosed) {
@@ -212,7 +224,11 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
                         TextButton(onClick = { a.gaveUp = true; a.revealed = true }) { Text("わからない") }
                         Spacer(Modifier.weight(1f))
                         Button(onClick = { a.revealed = true }, enabled = canCheck, modifier = Modifier.height(52.dp)) {
-                            Text(if (needsConfidence && a.confidence == null) "自信度を選んでください" else "答え合わせ",
+                            Text(when {
+                                needsConfidence && a.confidence == null -> "自信度を選んでください"
+                                q.mode == StudyMode.SELF -> "答えを見る"
+                                else -> "答え合わせ"
+                            },
                                 style = MaterialTheme.typography.titleSmall)
                         }
                     }
@@ -227,6 +243,11 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
 /** 回答の出来から「おすすめ」の評価を決める（押すのは自分）。 */
 private fun suggestedRating(q: Question, a: Answer): Rating {
     if (a.gaveUp) return Rating.WEAK
+    if (q.mode == StudyMode.SELF) return when (a.confidence) {
+        Confidence.HIGH -> Rating.MASTERED
+        Confidence.LOW -> Rating.WEAK
+        else -> Rating.GOOD
+    }
     val ok = when (q.mode) {
         StudyMode.WORD -> a.choices.getOrNull(a.choice ?: -1)?.id == q.word?.id
         StudyMode.CLOZE -> a.cloze?.blanks?.all { TextUtil.sameWord(it.answer, a.blanks[it.index]) } == true
@@ -234,7 +255,8 @@ private fun suggestedRating(q: Question, a: Answer): Rating {
         StudyMode.SHADOWING -> a.text.isBlank() || TextUtil.diff(q.sentence!!.en, a.text).score >= 0.85f
         else -> TextUtil.diff(q.sentence!!.en, a.text).score >= 0.9f
     }
-    return if (!ok) Rating.WEAK else if (a.confidence == Confidence.HIGH) Rating.MASTERED else Rating.GOOD
+    return if (!ok) Rating.WEAK
+    else if (a.confidence == Confidence.HIGH && q.mode.isTranslation) Rating.MASTERED else Rating.GOOD
 }
 
 @Composable
@@ -269,6 +291,13 @@ private fun SentenceQuestion(q: Question, s: Sentence, a: Answer, deck: Deck, vm
         StudyMode.FREE -> {
             JapaneseCard(s.ja)
             AnswerField(a, enabled = !a.revealed, onMic = onMic, placeholder = "英文を書く（マイクでも OK）")
+        }
+        StudyMode.SELF -> {
+            JapaneseCard(s.ja)
+            if (!a.revealed) Text(
+                "頭の中で（できれば声に出して）英文を最後まで言ってから、答えを見ましょう。",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         StudyMode.CLOZE -> {
             JapaneseCard(s.ja)
@@ -389,35 +418,87 @@ private fun ClozeView(a: Answer) {
 @Composable
 private fun PuzzleView(a: Answer) {
     val status = StatusPalette.current
+    // 並べた単語の位置（ルート座標）。ドラッグを離した場所から入れる位置を決める。
+    val bounds = remember(a) { mutableStateMapOf<Int, Rect>() }
+    var dragFrom by remember(a) { mutableStateOf<Int?>(null) }
+    var dragOffset by remember(a) { mutableStateOf(Offset.Zero) }
+
+    fun drop() {
+        val from = dragFrom ?: return
+        val start = bounds[from]
+        if (start != null) {
+            val p = start.center + dragOffset
+            val live = bounds.filterKeys { it < a.picked.size }
+            val target = live.entries.firstOrNull { it.value.contains(p) }?.key
+                ?: live.entries.minByOrNull { (it.value.center - p).getDistance() }?.key
+            if (target != null && target != from) {
+                val item = a.picked.removeAt(from)
+                a.picked.add(target.coerceIn(0, a.picked.size), item)
+            }
+        }
+        dragFrom = null
+        dragOffset = Offset.Zero
+    }
+
     AppCard(Modifier.fillMaxWidth()) {
         FlowRow(
             Modifier.padding(16.dp).heightIn(min = 64.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             a.picked.forEachIndexed { pos, idx ->
-                val color = when {
-                    !a.revealed -> MaterialTheme.colorScheme.primary
-                    a.pieces[pos] == a.pieces[idx] -> status.mastered
-                    else -> status.weak
+                key(idx) {
+                    val currentPos by rememberUpdatedState(pos)
+                    val dragging = dragFrom == pos
+                    val color = when {
+                        !a.revealed -> MaterialTheme.colorScheme.primary
+                        a.pieces[pos] == a.pieces[idx] -> status.mastered
+                        else -> status.weak
+                    }
+                    PieceChip(
+                        a.pieces[idx], filled = true, color = color,
+                        modifier = Modifier
+                            .onGloballyPositioned { bounds[currentPos] = it.boundsInRoot() }
+                            .zIndex(if (dragging) 1f else 0f)
+                            .graphicsLayer {
+                                if (dragging) {
+                                    translationX = dragOffset.x; translationY = dragOffset.y
+                                    scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 12f
+                                }
+                            }
+                            .pointerInput(a.revealed) {
+                                if (a.revealed) return@pointerInput
+                                detectDragGestures(
+                                    onDragStart = { dragFrom = currentPos; dragOffset = Offset.Zero },
+                                    onDrag = { change, amount -> change.consume(); dragOffset += amount },
+                                    onDragEnd = { drop() },
+                                    onDragCancel = { dragFrom = null; dragOffset = Offset.Zero },
+                                )
+                            },
+                    ) { if (!a.revealed) a.picked.removeAt(currentPos) }
                 }
-                PieceChip(a.pieces[idx], filled = true, color = color) { if (!a.revealed) a.picked.removeAt(pos) }
             }
         }
     }
-    if (!a.revealed) FlowRow(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        a.shuffled.filter { it !in a.picked }.forEach { idx ->
-            PieceChip(a.pieces[idx], filled = false, color = MaterialTheme.colorScheme.primary) { a.picked.add(idx) }
+    if (!a.revealed) {
+        Text(
+            "下の単語をタップして並べる。並べた単語はドラッグで順番を入れ替え、タップで下に戻せます。",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            a.shuffled.filter { it !in a.picked }.forEach { idx ->
+                PieceChip(a.pieces[idx], filled = false, color = MaterialTheme.colorScheme.primary) { a.picked.add(idx) }
+            }
         }
     }
 }
 
 @Composable
-private fun PieceChip(text: String, filled: Boolean, color: Color, onClick: () -> Unit) {
+private fun PieceChip(text: String, filled: Boolean, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        Modifier.clip(RoundedCornerShape(12.dp))
+        modifier.clip(RoundedCornerShape(12.dp))
             .then(if (filled) Modifier.background(color.copy(alpha = 0.12f)) else Modifier.background(MaterialTheme.colorScheme.surfaceContainerLowest))
             .border(BorderStroke(1.5.dp, if (filled) color else MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
@@ -546,8 +627,16 @@ private fun Feedback(q: Question, a: Answer, deck: Deck, vm: AppViewModel) {
 @Composable
 private fun RatingButtons(q: Question, confidence: Confidence?, suggested: Rating, vm: AppViewModel, onRate: (Rating) -> Unit) {
     val status = StatusPalette.current
+    // 「覚えた」は和文英訳だけ。練習モードは 苦手 / 得意 の 2 つ。
+    val ratings = if (q.mode.isTranslation) Rating.entries else listOf(Rating.WEAK, Rating.GOOD)
+    Column {
+    if (!q.mode.isTranslation) Text(
+        "練習モードの結果は「覚えた」には反映されません（覚えたは和文英訳で）",
+        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Rating.entries.forEach { r ->
+        ratings.forEach { r ->
             val color = when (r) { Rating.WEAK -> status.weak; Rating.GOOD -> status.good; Rating.MASTERED -> status.mastered }
             val isSuggested = r == suggested
             Button(
@@ -563,6 +652,7 @@ private fun RatingButtons(q: Question, confidence: Confidence?, suggested: Ratin
                 }
             }
         }
+    }
     }
 }
 

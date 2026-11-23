@@ -68,8 +68,12 @@ data class Progress(
     val reps: Int = 0,
     val lapses: Int = 0,
     val lastDay: Long = -1,
-    /** 語順パズルを一度やったか（2 回目からは自由英訳に切り替える）。 */
+    /** 旧バージョンとの互換のため残している（未使用）。 */
     val puzzleDone: Boolean = false,
+    /** 前回の復習間隔（日）。0 = まだ間隔を空けた復習をしていない。 */
+    val interval: Int = 0,
+    /** 覚えやすさ（間隔を何倍ずつ伸ばすか）。苦手にすると下がる。 */
+    val ease: Float = Srs.START_EASE,
 )
 
 /** 1 日分の学習ログ。 */
@@ -81,15 +85,24 @@ data class DayLog(
 )
 
 enum class StudyMode(val label: String, val description: String) {
-    FREE("自由英訳", "日本語を見て英文を書く"),
+    FREE("和文英訳（入力）", "日本語を見て英文を書いて答え合わせ"),
+    SELF("和文英訳（判定）", "頭の中で英訳して、答えを見て自分で判定"),
     CLOZE("穴埋め", "重要語だけを空欄に"),
     PUZZLE("語順パズル", "単語を並べ替えて英文に"),
     DICTATION("ディクテーション", "音声を聞いて書き取る"),
     SHADOWING("シャドーイング", "音声に合わせて声に出す"),
     WORD("単語テスト", "意味から見出し語を選ぶ"),
+    ;
+
+    /** 和文英訳だけが「覚えた」まで進める本番。ほかのモードは練習。 */
+    val isTranslation: Boolean get() = this == FREE || this == SELF
 }
 
 object Keys {
     fun sentence(id: Int) = "s:$id"
     fun word(id: Int) = "w:$id"
+    /** 和文英訳以外の練習モードの記録（例文の「覚えた」には影響しない）。 */
+    fun practice(mode: StudyMode, id: Int) = "p:${mode.name}:$id"
+
+    fun forSentence(mode: StudyMode, id: Int) = if (mode.isTranslation) sentence(id) else practice(mode, id)
 }

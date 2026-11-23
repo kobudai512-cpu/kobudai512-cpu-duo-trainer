@@ -21,7 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -88,9 +89,9 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
         // 今日の復習（いちばん大きいカード）
         TodayCard(
             due = due, fresh = fresh, answered = answeredToday, goal = user.settings.dailyGoal,
-            onStart = {
-                if (due + fresh > 0) vm.startSession(Scope.Today, StudyMode.FREE)
-                else vm.startSession(Scope.Section(user.lastSection), StudyMode.FREE)
+            onStart = { mode ->
+                if (due + fresh > 0) vm.startSession(Scope.Today, mode)
+                else vm.startSession(Scope.Section(user.lastSection), mode)
             },
         )
 
@@ -110,7 +111,7 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
         }
 
         // 苦手な例文をランダムに
-        AppCard(Modifier.fillMaxWidth(), onClick = { vm.startSession(Scope.Weak, StudyMode.FREE) }) {
+        AppCard(Modifier.fillMaxWidth(), onClick = { vm.startSession(Scope.Weak, user.translationMode) }) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(StatusPalette.current.weak.copy(alpha = 0.15f)),
@@ -119,7 +120,7 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("苦手な例文をランダムに", style = MaterialTheme.typography.titleSmall)
-                    Text("日本語訳から英語に。苦手 $weakCount 文", style = MaterialTheme.typography.bodySmall,
+                    Text("${user.translationMode.label}で。苦手 $weakCount 文", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null)
@@ -133,14 +134,14 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { m ->
                     ModeTile(m, Modifier.weight(1f)) {
-                        vm.startSession(if (m == StudyMode.FREE) Scope.Today else Scope.Section(user.lastSection), m)
+                        vm.startSession(if (m.isTranslation) Scope.Today else Scope.Section(user.lastSection), m)
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
         Text(
-            "自由英訳は「今日の復習」から、そのほかは前回のセクション（Section ${user.lastSection}）から出題します。",
+            "和文英訳は「今日の復習」から、そのほかは前回のセクション（Section ${user.lastSection}）から練習として出題します。「覚えた」にできるのは和文英訳だけです。",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
@@ -204,7 +205,7 @@ private fun StreakChip(days: Int) {
 }
 
 @Composable
-private fun TodayCard(due: Int, fresh: Int, answered: Int, goal: Int, onStart: () -> Unit) {
+private fun TodayCard(due: Int, fresh: Int, answered: Int, goal: Int, onStart: (StudyMode) -> Unit) {
     val total = due + fresh
     Box(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
@@ -234,15 +235,35 @@ private fun TodayCard(due: Int, fresh: Int, answered: Int, goal: Int, onStart: (
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = onStart,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF3355E8)),
-            ) {
-                Icon(Icons.Rounded.PlayArrow, null)
-                Spacer(Modifier.width(6.dp))
-                Text(if (total > 0) "学習をはじめる" else "今日の分は完了！もっと練習する", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            if (total == 0) Text("今日の分は完了！ 続けるなら前回のセクションから", style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(bottom = 8.dp))
+            // 和文英訳の 2 つのやり方
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = { onStart(StudyMode.SELF) },
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF3355E8)),
+                ) {
+                    Icon(Icons.Rounded.Psychology, null)
+                    Spacer(Modifier.width(6.dp))
+                    Column {
+                        Text("頭で英訳", style = MaterialTheme.typography.titleSmall)
+                        Text("自分で判定", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Button(
+                    onClick = { onStart(StudyMode.FREE) },
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.18f), contentColor = Color.White),
+                ) {
+                    Icon(Icons.Rounded.Edit, null)
+                    Spacer(Modifier.width(6.dp))
+                    Column {
+                        Text("書いて英訳", style = MaterialTheme.typography.titleSmall)
+                        Text("入力して答え合わせ", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
     }
