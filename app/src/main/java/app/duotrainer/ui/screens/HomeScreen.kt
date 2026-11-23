@@ -1,0 +1,250 @@
+package app.duotrainer.ui.screens
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import app.duotrainer.AppViewModel
+import app.duotrainer.Route
+import app.duotrainer.UiState
+import app.duotrainer.core.Category
+import app.duotrainer.core.Keys
+import app.duotrainer.core.Scope
+import app.duotrainer.core.StudyMode
+import app.duotrainer.core.category
+import app.duotrainer.ui.components.AppCard
+import app.duotrainer.ui.components.CategoryBar
+import app.duotrainer.ui.components.CategoryLegend
+import app.duotrainer.ui.components.ModeTile
+import app.duotrainer.ui.components.NumberBadge
+import app.duotrainer.ui.components.ProgressRing
+import app.duotrainer.ui.components.SectionTitle
+import app.duotrainer.ui.theme.StatusPalette
+import java.time.LocalDate
+import java.time.LocalTime
+
+@Composable
+fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
+    val deck = state.deck ?: return
+    val user = state.user
+    val planner = vm.planner() ?: return
+    val (due, fresh) = planner.todayRemaining(user.settings.newPerDay)
+    val todayLog = user.days[vm.today.toString()]
+    val answeredToday = todayLog?.answered ?: 0
+    val streak = vm.streak()
+    val weakCount = planner.weakSentences().size
+    val counts = deck.sentences.groupingBy { user.progress[Keys.sentence(it.id)].category() }.eachCount()
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let(vm::setAudioFolder)
+    }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // ヘッダー：あいさつと連続学習日数
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                val d = LocalDate.now()
+                Text("${d.monthValue}月${d.dayOfMonth}日", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(greeting(), style = MaterialTheme.typography.headlineSmall)
+            }
+            StreakChip(streak)
+        }
+
+        // 今日の復習（いちばん大きいカード）
+        TodayCard(
+            due = due, fresh = fresh, answered = answeredToday, goal = user.settings.dailyGoal,
+            onStart = {
+                if (due + fresh > 0) vm.startSession(Scope.Today, StudyMode.FREE)
+                else vm.startSession(Scope.Section(user.lastSection), StudyMode.FREE)
+            },
+        )
+
+        if (user.tracks.isEmpty()) {
+            AppCard(Modifier.fillMaxWidth(), onClick = { pickFolder.launch(null) }, color = MaterialTheme.colorScheme.tertiaryContainer) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Folder, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("音声フォルダを設定", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        Text("CD 音声を使うと、ディクテーションとシャドーイングが本物の音声になります",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                    }
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                }
+            }
+        }
+
+        // 苦手な例文をランダムに
+        AppCard(Modifier.fillMaxWidth(), onClick = { vm.startSession(Scope.Weak, StudyMode.FREE) }) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(StatusPalette.current.weak.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Rounded.Shuffle, null, tint = StatusPalette.current.weak) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("苦手な例文をランダムに", style = MaterialTheme.typography.titleSmall)
+                    Text("日本語訳から英語に。苦手 $weakCount 文", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null)
+            }
+        }
+
+        // 学習モード
+        SectionTitle("学習モード")
+        val modes = StudyMode.entries
+        modes.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                row.forEach { m ->
+                    ModeTile(m, Modifier.weight(1f)) {
+                        vm.startSession(if (m == StudyMode.FREE) Scope.Today else Scope.Section(user.lastSection), m)
+                    }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Text(
+            "自由英訳は「今日の復習」から、そのほかは前回のセクション（Section ${user.lastSection}）から出題します。",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+
+        // 続きから
+        SectionTitle("続きから")
+        val sec = user.lastSection
+        val inSec = deck.sentencesIn(sec)
+        val mastered = inSec.count { user.progress[Keys.sentence(it.id)].category() == Category.MASTERED }
+        AppCard(Modifier.fillMaxWidth(), onClick = { open(Route.Section(sec)) }) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                NumberBadge(sec)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Section $sec", style = MaterialTheme.typography.titleSmall)
+                    Text(inSec.firstOrNull()?.en.orEmpty(), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+                Text("$mastered/${inSec.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+
+        // 全体の進み具合
+        SectionTitle("DUO 3.0 全体")
+        AppCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("${counts[Category.MASTERED] ?: 0}", style = MaterialTheme.typography.headlineMedium)
+                    Text(" / ${deck.sentences.size} 文 覚えた", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+                }
+                CategoryBar(counts)
+                CategoryLegend(counts)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+private fun greeting(): String {
+    val h = LocalTime.now().hour
+    return when (h) {
+        in 4..10 -> "おはようございます"
+        in 11..17 -> "こんにちは"
+        else -> "こんばんは"
+    }
+}
+
+@Composable
+private fun StreakChip(days: Int) {
+    val c = StatusPalette.current.streak
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(c.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.LocalFireDepartment, null, tint = c, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(4.dp))
+        Text("$days", style = MaterialTheme.typography.titleMedium, color = c, fontWeight = FontWeight.Bold)
+        Text(" 日連続", style = MaterialTheme.typography.labelMedium, color = c)
+    }
+}
+
+@Composable
+private fun TodayCard(due: Int, fresh: Int, answered: Int, goal: Int, onStart: () -> Unit) {
+    val total = due + fresh
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF3355E8), Color(0xFF5B6CFF), Color(0xFF7C5CFF))))
+            .padding(20.dp),
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("今日の復習", style = MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.9f))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("あと ", style = MaterialTheme.typography.titleMedium, color = Color.White,
+                            modifier = Modifier.padding(bottom = 8.dp))
+                        Text("$total", style = MaterialTheme.typography.displayMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(" 文", style = MaterialTheme.typography.titleMedium, color = Color.White,
+                            modifier = Modifier.padding(bottom = 8.dp))
+                    }
+                    Text("復習 $due ・ 新しい例文 $fresh", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.85f))
+                }
+                ProgressRing(
+                    progress = answered.toFloat() / goal.coerceAtLeast(1),
+                    size = 88.dp, stroke = 9.dp, color = Color.White, track = Color.White.copy(alpha = 0.25f),
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("$answered", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                        Text("/ $goal 問", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.85f))
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onStart,
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF3355E8)),
+            ) {
+                Icon(Icons.Rounded.PlayArrow, null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (total > 0) "学習をはじめる" else "今日の分は完了！もっと練習する", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+}
+

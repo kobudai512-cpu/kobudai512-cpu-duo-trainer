@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 開いた本と吹き出し（例文を声に出すイメージ） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M33,48 C40,44 46,44 52,48 L52,76 C46,72 40,72 33,76 Z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M56,48 C62,44 68,44 75,48 L75,76 C68,72 62,72 56,76 Z" />
+    <path android:fillColor="#FFB547"
+        android:pathData="M60,30 h12 a4,4 0 0 1 4,4 v6 a4,4 0 0 1 -4,4 h-6 l-5,4 v-4 h-1 a4,4 0 0 1 -4,-4 v-6 a4,4 0 0 1 4,-4 z" />
+</vector>

@@ -1,0 +1,21 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.kotlin/
+captures/
+*.apk
+*.aab
+*.jks
+*.keystore
+!app/debug.keystore
+
+# 教材データはリポジトリに入れない（著作権のため）
+*.mp3
+*.m4a
+*.wav
+data/
+DUO*.txt
+*_DUO*.txt
