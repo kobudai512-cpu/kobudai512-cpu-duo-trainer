@@ -35,7 +35,15 @@ data class Word(
 data class Deck(
     val sentences: List<Sentence>,
     val words: List<Word>,
+    /** 対応付けの方式の版。上がったら読み込み時に作り直す。 */
+    val version: Int = 0,
 ) {
+    /** 保存済みの本文から、新しい方式で対応付けをやり直す（再インポート不要）。 */
+    fun realigned(): Deck = Aligner.align(
+        sentences.map { DeckParser.RawSentence(it.en, it.ja) },
+        words.map { DeckParser.RawWord(it.en, it.ja, it.section) },
+    )
+
     val sections: List<Int> get() = sentences.map { it.section }.distinct().sorted()
     fun sentencesIn(section: Int) = sentences.filter { it.section == section }
     fun wordsIn(section: Int) = words.filter { it.section == section }

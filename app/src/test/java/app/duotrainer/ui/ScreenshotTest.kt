@@ -117,9 +117,8 @@ class ScreenshotTest {
         val vm = vm(session(StudyMode.FREE, 3))
         compose.setContent { DuoTheme { StudyScreen(vm.state.value, vm) } }
         compose.onNode(hasSetTextAction()).performTextInput("Never give up your dream no matter what")
-        compose.onNodeWithText("たぶん").performClick()
         compose.onRoot().captureRoboImage("../docs/screenshots/free_question.png")
-        compose.onNodeWithText("答え合わせ").performClick()
+        compose.onNodeWithText("たぶん").performClick()  // 自信度を選ぶと答えが出る
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("../docs/screenshots/free_answer.png")
     }

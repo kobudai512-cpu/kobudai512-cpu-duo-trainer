@@ -69,7 +69,12 @@ class Store(private val context: Context) {
     private val userFile get() = File(context.filesDir, "user.json")
 
     suspend fun loadDeck(): Deck? = withContext(Dispatchers.IO) {
-        runCatching { json.decodeFromString<Deck>(deckFile.readText()) }.getOrNull()
+        val deck = runCatching { json.decodeFromString<Deck>(deckFile.readText()) }.getOrNull() ?: return@withContext null
+        if (deck.version >= app.duotrainer.core.Aligner.VERSION) return@withContext deck
+        // 対応付けの方式が新しくなったので作り直して保存（id はファイルの順なので学習記録はそのまま）
+        val fresh = withContext(Dispatchers.Default) { deck.realigned() }
+        runCatching { deckFile.writeText(json.encodeToString(Deck.serializer(), fresh)) }
+        fresh
     }
 
     suspend fun loadUser(): UserData = withContext(Dispatchers.IO) {

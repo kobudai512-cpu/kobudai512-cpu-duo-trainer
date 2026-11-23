@@ -46,6 +46,17 @@ class CoreTest {
         assertNotNull(TextUtil.findHeadword("let go of ～/let ～go", t2))
     }
 
+    @Test fun phraseIncludesSmallWords() {
+        fun blanks(head: String, s: String) =
+            TextUtil.findPhrase(head, TextUtil.tokens(s))?.map { TextUtil.tokens(s)[it].text }
+        assertEquals(listOf("once", "and", "for", "all"), blanks("once and for all", "Let's settle this once and for all."))
+        assertEquals(listOf("at", "any", "moment"), blanks("at any moment", "It could start raining at any moment."))
+        assertEquals(listOf("looking", "forward", "to"), blanks("look forward to ～", "I'm looking forward to the trip."))
+        assertEquals(listOf("take", "a", "chance"), blanks("take a chance", "You should take a chance."))
+        assertEquals(listOf("As", "for"), blanks("as for", "As for me, I'm fine."))
+        assertEquals(listOf("shook", "head"), blanks("shake one's head", "He shook his head."))
+    }
+
     @Test fun clozeBlanksKeywords() {
         val deck = DeckParser.parse(sample)
         val s = deck.sentence(1)!!

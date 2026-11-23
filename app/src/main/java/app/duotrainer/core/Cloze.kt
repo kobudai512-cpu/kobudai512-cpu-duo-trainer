@@ -16,7 +16,7 @@ data class Cloze(val parts: List<Part>) {
         fun build(sentence: Sentence, words: List<Word>): Cloze {
             val tokens = TextUtil.tokens(sentence.en)
             val blankIdx = sortedSetOf<Int>()
-            for (w in words) TextUtil.findHeadword(w.en, tokens)?.let { blankIdx += it }
+            for (w in words) TextUtil.findPhrase(w.en, tokens)?.let { blankIdx += it }
             if (blankIdx.isEmpty() && tokens.isNotEmpty()) {
                 blankIdx += tokens.indices.maxBy { tokens[it].text.length }
             }

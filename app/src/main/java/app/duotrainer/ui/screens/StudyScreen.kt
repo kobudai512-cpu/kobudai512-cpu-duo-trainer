@@ -154,7 +154,8 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
     }
 
     val needsConfidence = q.mode != StudyMode.SHADOWING
-    val canCheck = (!needsConfidence || a.confidence != null) && when (q.mode) {
+    // 入力が済んだか（自信度ボタンを押すと、そのまま答え合わせになる）
+    val canCheck = when (q.mode) {
         StudyMode.PUZZLE -> a.picked.size == a.pieces.size
         StudyMode.WORD -> a.choice != null
         else -> true
@@ -206,7 +207,6 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
                 else -> SentenceQuestion(q, q.sentence!!, a, deck, vm, onMic = launchMic)
             }
 
-            if (needsConfidence && !a.revealed) ConfidencePicker(a.confidence) { a.confidence = it }
 
             AnimatedVisibility(a.revealed) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -219,17 +219,24 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
         // 下部ボタン
         Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, tonalElevation = 0.dp, shadowElevation = 8.dp) {
             Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                if (!a.revealed) {
+                if (!a.revealed && needsConfidence) {
+                    // 自信度を選んだ瞬間に答えを表示する
+                    ConfidenceButtons(
+                        enabled = canCheck,
+                        hint = when (q.mode) {
+                            StudyMode.SELF -> "英訳できたら、自信度を選ぶと答えが出ます"
+                            StudyMode.PUZZLE -> if (canCheck) "自信度を選ぶと答え合わせ" else "すべての単語を並べてから"
+                            StudyMode.WORD -> if (canCheck) "自信度を選ぶと答え合わせ" else "選択肢を選んでから"
+                            else -> "答えを書いたら、自信度を選ぶと答え合わせ"
+                        },
+                        onGiveUp = { a.gaveUp = true; a.confidence = Confidence.LOW; a.revealed = true },
+                    ) { c -> a.confidence = c; a.revealed = true }
+                } else if (!a.revealed) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { a.gaveUp = true; a.revealed = true }) { Text("わからない") }
                         Spacer(Modifier.weight(1f))
-                        Button(onClick = { a.revealed = true }, enabled = canCheck, modifier = Modifier.height(52.dp)) {
-                            Text(when {
-                                needsConfidence && a.confidence == null -> "自信度を選んでください"
-                                q.mode == StudyMode.SELF -> "答えを見る"
-                                else -> "答え合わせ"
-                            },
-                                style = MaterialTheme.typography.titleSmall)
+                        Button(onClick = { a.revealed = true }, modifier = Modifier.height(52.dp)) {
+                            Text("答えを見る", style = MaterialTheme.typography.titleSmall)
                         }
                     }
                 } else {
@@ -551,18 +558,29 @@ private fun WordQuestion(w: Word, a: Answer, deck: Deck, vm: AppViewModel) {
 }
 
 @Composable
-private fun ConfidencePicker(selected: Confidence?, onSelect: (Confidence) -> Unit) {
+private fun ConfidenceButtons(enabled: Boolean, hint: String, onGiveUp: () -> Unit, onSelect: (Confidence) -> Unit) {
+    val status = StatusPalette.current
     Column {
-        Text("答える前に：自信は？", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("自信は？  $hint", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            TextButton(onClick = onGiveUp) { Text("わからない") }
+        }
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Confidence.entries.forEach { c ->
-                FilterChip(
-                    selected = selected == c,
+                val color = when (c) {
+                    Confidence.LOW -> status.weak
+                    Confidence.MID -> status.good
+                    Confidence.HIGH -> status.mastered
+                }
+                Button(
                     onClick = { onSelect(c) },
-                    label = { Text(c.label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
-                    modifier = Modifier.weight(1f).height(44.dp),
-                )
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = color.copy(alpha = 0.14f), contentColor = color),
+                    shape = MaterialTheme.shapes.medium,
+                ) { Text(c.label, style = MaterialTheme.typography.titleSmall) }
             }
         }
     }
@@ -663,7 +681,7 @@ private fun highlightKeywords(s: Sentence, deck: Deck, color: Color): AnnotatedS
 
 private fun highlightWords(text: String, words: List<Word>, color: Color): AnnotatedString {
     val tokens = TextUtil.tokens(text)
-    val marks = words.flatMap { TextUtil.findHeadword(it.en, tokens).orEmpty() }.toSet()
+    val marks = words.flatMap { TextUtil.findPhrase(it.en, tokens).orEmpty() }.toSet()
     return buildAnnotatedString {
         var pos = 0
         tokens.forEachIndexed { i, t ->

@@ -56,6 +56,7 @@ object DeckParser {
 
 /** 例文と見出し語を結び付ける。 */
 object Aligner {
+    const val VERSION = 2
 
     fun align(sentences: List<DeckParser.RawSentence>, words: List<DeckParser.RawWord>): Deck {
         val sentTokens = sentences.map { TextUtil.tokens(it.en) }
@@ -90,7 +91,11 @@ object Aligner {
             var cursor = 0
             for (wi in ids) {
                 val ordered = cands.drop(cursor) + cands.take(cursor)
-                val hit = ordered.firstOrNull { TextUtil.findKeys(keys[wi], sentTokens[it]) != null }
+                // as for / be in のような小さな語だけの熟語は、並びそのものを探す
+                val hit = ordered.firstOrNull {
+                    if (keys[wi].isEmpty()) TextUtil.findPhrase(words[wi].en, sentTokens[it]) != null
+                    else TextUtil.findKeys(keys[wi], sentTokens[it]) != null
+                }
                 if (hit != null) {
                     wordSentence[wi] = hit
                     cursor = cands.indexOf(hit)
@@ -110,6 +115,6 @@ object Aligner {
         val outWords = words.mapIndexed { i, w ->
             Word(id = i + 1, en = w.en, ja = w.ja, section = w.section, sentenceId = wordSentence[i]?.plus(1))
         }
-        return Deck(outSentences, outWords)
+        return Deck(outSentences, outWords, VERSION)
     }
 }

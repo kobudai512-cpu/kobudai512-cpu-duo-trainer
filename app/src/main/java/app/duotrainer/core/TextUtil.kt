@@ -48,6 +48,34 @@ object TextUtil {
         }
     }
 
+    /** 不規則動詞の過去形・過去分詞（語幹の前方一致では拾えないもの）。 */
+    private val IRREGULAR: Map<String, Set<String>> = mapOf(
+        "shake" to "shook shaken", "take" to "took taken", "give" to "gave given", "break" to "broke broken",
+        "come" to "came", "get" to "got gotten", "go" to "went gone", "run" to "ran", "bring" to "brought",
+        "tell" to "told", "lie" to "lay lain lying", "lay" to "laid", "sit" to "sat", "seek" to "sought",
+        "bear" to "bore born borne", "make" to "made", "think" to "thought", "catch" to "caught",
+        "buy" to "bought", "fall" to "fell fallen", "keep" to "kept", "hold" to "held", "leave" to "left",
+        "tear" to "tore torn", "throw" to "threw thrown", "see" to "saw seen", "find" to "found",
+        "feel" to "felt", "stand" to "stood", "wear" to "wore worn", "blow" to "blew blown",
+        "shrink" to "shrank shrunk", "have" to "had has", "say" to "said", "speak" to "spoke spoken",
+        "write" to "wrote written", "choose" to "chose chosen", "drive" to "drove driven",
+        "fight" to "fought", "teach" to "taught", "send" to "sent", "spend" to "spent", "lose" to "lost",
+        "win" to "won", "begin" to "began begun", "drink" to "drank drunk", "swear" to "swore sworn",
+        "creep" to "crept", "steal" to "stole stolen", "hide" to "hid hidden", "forget" to "forgot forgotten",
+        "grow" to "grew grown", "know" to "knew known", "draw" to "drew drawn", "fly" to "flew flown",
+        "ride" to "rode ridden", "rise" to "rose risen", "sell" to "sold", "strike" to "struck",
+        "hang" to "hung", "dig" to "dug", "lend" to "lent", "mean" to "meant", "meet" to "met",
+        "pay" to "paid", "sleep" to "slept", "sweep" to "swept", "weep" to "wept", "bite" to "bit bitten",
+        "freeze" to "froze frozen", "wake" to "woke woken", "shine" to "shone", "shoot" to "shot",
+        "sink" to "sank sunk", "sting" to "stung", "swim" to "swam swum", "be" to "is am are was were been",
+        "feed" to "fed", "lead" to "led", "deal" to "dealt", "build" to "built", "bend" to "bent",
+        "stick" to "stuck", "hear" to "heard", "understand" to "understood", "arise" to "arose arisen",
+    ).mapValues { it.value.split(' ').toSet() }
+
+    /** トークンが見出し語の 1 語（活用形を含む）に当たるか。 */
+    fun matchesKey(token: Token, key: String): Boolean =
+        token.lower.startsWith(stem(key)) || IRREGULAR[key]?.contains(token.lower) == true
+
     /** 見出し語が英文に含まれていれば、そのトークン位置を返す（含まれなければ null）。 */
     fun findHeadword(headword: String, sentence: List<Token>): List<Int>? =
         findKeys(headwordKeys(headword), sentence)
@@ -59,14 +87,75 @@ object TextUtil {
             var ok = true
             var from = 0
             for (key in alt) {
-                val st = stem(key)
-                val idx = (from until sentence.size).firstOrNull { sentence[it].lower.startsWith(st) }
-                    ?: sentence.indices.firstOrNull { sentence[it].lower.startsWith(st) }
+                val idx = (from until sentence.size).firstOrNull { matchesKey(sentence[it], key) }
+                    ?: sentence.indices.firstOrNull { matchesKey(sentence[it], key) }
                 if (idx == null) { ok = false; break }
                 hits += idx
                 from = idx + 1
             }
             if (ok && hits.isNotEmpty()) return hits.distinct()
+        }
+        return null
+    }
+
+    /** 見出し語の中の「何が入ってもいい所」（～, A, one's など）。 */
+    private val PLACEHOLDER = setOf("sb", "sth", "one's", "oneself", "do", "doing", "done", "s", "v")
+
+    private fun isPlaceholder(original: String) =
+        original == "A" || original == "B" || original.lowercase().replace('’', '\'') in PLACEHOLDER
+
+    private fun sameOrInflected(token: Token, word: String): Boolean {
+        val w = word.lowercase().replace('’', '\'')
+        return token.lower == w || (w.length >= 4 && token.lower.startsWith(stem(w))) || IRREGULAR[w]?.contains(token.lower) == true
+    }
+
+    /**
+     * 穴埋め・強調表示用：見出し語の熟語全体の位置を返す。
+     * 内容語（once, all など）だけでなく、その間と前後にある and / for / at / of / to などの
+     * 小さな語も、見出し語に含まれていれば一緒に含める。
+     *   "once and for all" → once, and, for, all
+     *   "at any moment"    → at, any, moment
+     */
+    fun findPhrase(headword: String, sentence: List<Token>): List<Int>? {
+        val stripped = headword.replace(Regex("\\(.*?\\)|（.*?）|\\[.*?]"), " ")
+        for (alt in stripped.split('/', '／', '、', ',')) {
+            val words = WORD.findAll(alt).map { it.value }.toList()
+            if (words.isEmpty()) continue
+            val isContent = words.map { !isPlaceholder(it) && it.lowercase().replace('’', '\'') !in STOP }
+            val content = words.filterIndexed { i, _ -> isContent[i] }.map { it.lowercase().replace('’', '\'') }
+            val hits: List<Int> = if (content.isNotEmpty()) {
+                findKeys(listOf(content), sentence) ?: continue
+            } else {
+                // 小さな語だけの熟語（"as for", "be in" など）は、そのまま並んでいる所を探す
+                val seq = words.filterNot(::isPlaceholder)
+                if (seq.isEmpty()) continue
+                val at = (0..sentence.size - seq.size).firstOrNull { s ->
+                    seq.indices.all { sameOrInflected(sentence[s + it], seq[it]) }
+                } ?: continue
+                seq.indices.map { at + it }
+            }
+            if (hits.isEmpty()) continue
+            val out = hits.toSortedSet()
+            val lo = out.first()
+            val hi = out.last()
+            val small = words.filterNot(::isPlaceholder).map { it.lowercase().replace('’', '\'') }.toSet()
+            // 内容語の間にある、見出し語に含まれる小さな語
+            for (i in lo..hi) if (sentence[i].lower in small) out += i
+            // 前に付く語（at any moment の at など）
+            val firstContent = isContent.indexOfFirst { it }.let { if (it < 0) 0 else it }
+            var j = firstContent - 1
+            var p = lo - 1
+            while (j >= 0 && p >= 0 && !isPlaceholder(words[j]) && sameOrInflected(sentence[p], words[j])) {
+                out += p; j--; p--
+            }
+            // 後ろに付く語（look forward to の to など）
+            val lastContent = isContent.indexOfLast { it }.let { if (it < 0) words.lastIndex else it }
+            j = lastContent + 1
+            p = hi + 1
+            while (j < words.size && p < sentence.size && !isPlaceholder(words[j]) && sameOrInflected(sentence[p], words[j])) {
+                out += p; j++; p++
+            }
+            return out.toList()
         }
         return null
     }
