@@ -16,7 +16,7 @@ class Envelope(val frameMs: Int, val levels: FloatArray) {
  *
  * 1. 音量が小さいフレームが minGapMs 以上続く所を「無音」とみなす
  * 2. 無音で区切られた発話のかたまりを作る
- * 3. 先頭の skip 個（タイトルの読み上げなど）を飛ばし、
+ * 3. 先頭の skip 個（「Section 1」などのタイトルの読み上げ。初期値 1）を飛ばし、
  *    残りを「長い無音の上位 (count-1) 個」で count 文に分ける
  *    （会話文の中の短い間で切れてしまわないように）
  */
@@ -27,6 +27,10 @@ object Segmenter {
         /** 0..1。大きいほど小さな音も無音扱いになる。 */
         val sensitivity: Float = 0.5f,
         val minGapMs: Int = 350,
+        /** 文の頭を少し前から始める（ms）。 */
+        val headMs: Int = 200,
+        /** 文の終わりを少し延ばす（ms）。語尾の弱い音が無音判定で切れないように。 */
+        val tailMs: Int = 700,
     )
 
     fun speechRuns(env: Envelope, opt: Options): List<Segment> {
@@ -65,19 +69,26 @@ object Segmenter {
     fun split(env: Envelope, count: Int, opt: Options = Options()): List<Segment> {
         val runs = speechRuns(env, opt).drop(opt.skip)
         if (runs.isEmpty() || count <= 0) return emptyList()
-        if (runs.size <= count) return runs.map { pad(it, env) }
+        if (runs.size <= count) return pad(runs, env, opt)
         // 発話のかたまり同士の間（無音）の長さが大きい順に count-1 個を区切りにする
         val gaps = (0 until runs.size - 1).map { it to (runs[it + 1].startMs - runs[it].endMs) }
         val cuts = gaps.sortedByDescending { it.second }.take(count - 1).map { it.first }.sorted()
         val out = mutableListOf<Segment>()
         var from = 0
         for (c in cuts + (runs.size - 1)) {
-            out += pad(Segment(runs[from].startMs, runs[c].endMs), env)
+            out += Segment(runs[from].startMs, runs[c].endMs)
             from = c + 1
         }
-        return out
+        return pad(out, env, opt)
     }
 
-    private fun pad(s: Segment, env: Envelope) =
-        Segment((s.startMs - 120).coerceAtLeast(0), (s.endMs + 200).coerceAtMost(env.durationMs))
+    /** 前後に余白をつける。ただし前後の文には食い込まない（間の無音の中で止める）。 */
+    private fun pad(segs: List<Segment>, env: Envelope, opt: Options): List<Segment> =
+        segs.mapIndexed { i, s ->
+            val prevEnd = segs.getOrNull(i - 1)?.endMs ?: 0L
+            val nextStart = segs.getOrNull(i + 1)?.startMs ?: env.durationMs
+            val start = maxOf(s.startMs - opt.headMs, (s.startMs + prevEnd) / 2, 0L)
+            val end = minOf(s.endMs + opt.tailMs, nextStart - minOf(opt.headMs.toLong(), (nextStart - s.endMs) / 2), env.durationMs)
+            Segment(start, maxOf(end, s.endMs))
+        }
 }

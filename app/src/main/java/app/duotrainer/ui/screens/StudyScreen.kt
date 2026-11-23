@@ -277,10 +277,6 @@ private fun SentenceQuestion(q: Question, s: Sentence, a: Answer, deck: Deck, vm
         StudyMode.PUZZLE -> {
             JapaneseCard(s.ja)
             PuzzleView(a)
-            if (!a.revealed) Text(
-                "はじめての例文は語順パズルで。2 回目からは自由英訳になります。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
         StudyMode.DICTATION -> {
             ListenCard(s, vm)

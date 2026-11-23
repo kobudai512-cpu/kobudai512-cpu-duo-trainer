@@ -51,13 +51,15 @@ import app.duotrainer.ui.theme.StatusPalette
 fun AudioTuneScreen(section: Int, state: UiState, vm: AppViewModel, back: () -> Unit) {
     val deck = state.deck ?: return
     val sentences = deck.sentencesIn(section)
-    val conf = state.user.sectionAudio[section.toString()] ?: SectionAudio()
+    val conf = state.user.sectionAudio[section.toString()]
+        ?.takeIf { it.version == SectionAudio.CURRENT_VERSION } ?: SectionAudio()
     var skip by remember(section) { mutableIntStateOf(conf.skip) }
     var sens by remember(section) { mutableFloatStateOf(conf.sensitivity) }
+    var tail by remember(section) { mutableIntStateOf(conf.tailMs) }
     val segs = conf.segments
     val status = StatusPalette.current
 
-    LaunchedEffect(section) { if (segs.isEmpty()) vm.tuneSection(section, skip, sens) }
+    LaunchedEffect(section) { if (segs.isEmpty()) vm.tuneSection(section, skip, sens, tail) }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
@@ -84,14 +86,16 @@ fun AudioTuneScreen(section: Int, state: UiState, vm: AppViewModel, back: () -> 
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
-                        Text("先頭で飛ばす数：$skip（タイトルの読み上げなどを飛ばす）", style = MaterialTheme.typography.labelLarge)
+                        Text("先頭で飛ばす数：$skip（最初の「Section $section」の読み上げ）", style = MaterialTheme.typography.labelLarge)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(onClick = { if (skip > 0) skip-- }) { Text("−") }
                             OutlinedButton(onClick = { skip++ }) { Text("＋") }
                         }
                         Text("無音の感度：${"%.2f".format(sens)}", style = MaterialTheme.typography.labelLarge)
                         Slider(value = sens, onValueChange = { sens = it }, valueRange = 0f..1f)
-                        Button(onClick = { vm.tuneSection(section, skip, sens) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("文の終わりを延ばす：${"%.1f".format(tail / 1000.0)} 秒（語尾が切れるときは長く）", style = MaterialTheme.typography.labelLarge)
+                        Slider(value = tail.toFloat(), onValueChange = { tail = (it / 100).toInt() * 100 }, valueRange = 0f..1500f)
+                        Button(onClick = { vm.tuneSection(section, skip, sens, tail) }, modifier = Modifier.fillMaxWidth()) {
                             Text("この設定で分割し直す")
                         }
                     }

@@ -53,7 +53,7 @@ class Planner(
         return due to fresh
     }
 
-    fun build(scope: Scope, mode: StudyMode, size: Int, newPerDay: Int, puzzleFirst: Boolean): List<Question> {
+    fun build(scope: Scope, mode: StudyMode, size: Int, newPerDay: Int): List<Question> {
         if (mode == StudyMode.WORD) return buildWords(scope, size)
         val list: List<Sentence> = when (scope) {
             Scope.Today -> {
@@ -71,11 +71,7 @@ class Planner(
                 (news + due + rest).take(size)
             }
         }
-        return list.map { s ->
-            val key = Keys.sentence(s.id)
-            val m = if (mode == StudyMode.FREE && puzzleFirst && progress[key]?.puzzleDone != true) StudyMode.PUZZLE else mode
-            Question(key, m, sentence = s)
-        }
+        return list.map { s -> Question(Keys.sentence(s.id), mode, sentence = s) }
     }
 
     private fun buildWords(scope: Scope, size: Int): List<Question> {

@@ -85,13 +85,11 @@ class CoreTest {
         assertTrue(out.zipWithNext().any { (x, y) -> x.section != y.section })
     }
 
-    @Test fun puzzleFirstThenFree() {
+    @Test fun freeTranslationFromFirstTime() {
         val deck = DeckParser.parse(sample)
-        val fresh = Planner(deck, emptyMap(), 0).build(Scope.Section(1), StudyMode.FREE, 10, 10, true)
-        assertTrue(fresh.all { it.mode == StudyMode.PUZZLE })
-        val done = mapOf(Keys.sentence(1) to Progress(puzzleDone = true, last = Rating.GOOD, due = 5))
-        val again = Planner(deck, done, 0).build(Scope.Section(1), StudyMode.FREE, 10, 10, true)
-        assertEquals(StudyMode.FREE, again.first { it.key == "s:1" }.mode)
+        val fresh = Planner(deck, emptyMap(), 0).build(Scope.Today, StudyMode.FREE, 10, 10)
+        assertTrue(fresh.isNotEmpty())
+        assertTrue(fresh.all { it.mode == StudyMode.FREE })
     }
 
     @Test fun streakCounts() {
@@ -111,8 +109,22 @@ class CoreTest {
         assertEquals(3, runs.size)
         val two = Segmenter.split(env, 2, Segmenter.Options(minGapMs = 150))
         assertEquals(2, two.size)
-        assertTrue(two[0].endMs in 1400L..1700L)
-        assertTrue(two[1].startMs in 2000L..2200L)
+        // 文末は 0.7 秒延ばすが、次の文の手前（間の無音の中）で止める
+        assertTrue(two[0].endMs in 1900L..2100L)
+        assertTrue(two[1].startMs in 1900L..2200L)
+        assertTrue(two[0].endMs <= two[1].startMs)
+    }
+
+    @Test fun segmenterSkipsSectionTitle() {
+        // 先頭に短い「Section 1」、そのあと 2 文
+        val frames = FloatArray(500) { 0.001f }
+        fun speak(a: Int, b: Int) { for (i in a until b) frames[i] = 0.5f }
+        speak(5, 40); speak(120, 200); speak(300, 420)
+        val env = Envelope(10, frames)
+        val segs = Segmenter.split(env, 2, Segmenter.Options(skip = 1))
+        assertEquals(2, segs.size)
+        assertTrue(segs[0].startMs >= 1000L)
+        assertTrue(segs[1].endMs >= 4200L + 600L)
     }
 
     /** 手元に本物のデータがあるときだけ動く確認用テスト（-Dduo.file=path）。 */

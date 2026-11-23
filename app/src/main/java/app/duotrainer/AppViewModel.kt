@@ -152,7 +152,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startSession(scope: Scope, mode: StudyMode) {
         val p = planner() ?: return
         val s = _state.value.user.settings
-        val qs = p.build(scope, mode, s.sessionSize, s.newPerDay, s.puzzleFirst)
+        val qs = p.build(scope, mode, s.sessionSize, s.newPerDay)
         if (qs.isEmpty()) {
             toast(when (scope) {
                 Scope.Weak -> "苦手な問題はまだありません"
@@ -256,18 +256,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val user = _state.value.user
         val deck = _state.value.deck ?: return null
         val track = user.tracks[section.toString()] ?: return null
-        val conf = user.sectionAudio[section.toString()] ?: SectionAudio()
+        val saved = user.sectionAudio[section.toString()]
+        // 古い方式で分けた結果は、新しい初期設定で作り直す
+        val conf = if (saved == null || saved.version != SectionAudio.CURRENT_VERSION) SectionAudio() else saved
         if (!force && conf.segments.isNotEmpty()) return conf.segments
         val env = library.envelope(Uri.parse(track))
         val count = deck.sentencesIn(section).size
-        val segs = Segmenter.split(env, count, Segmenter.Options(skip = conf.skip, sensitivity = conf.sensitivity))
+        val segs = Segmenter.split(env, count, Segmenter.Options(skip = conf.skip, sensitivity = conf.sensitivity, tailMs = conf.tailMs))
         updateUser { u -> u.copy(sectionAudio = u.sectionAudio + (section.toString() to conf.copy(segments = segs))) }
         return segs
     }
 
-    fun tuneSection(section: Int, skip: Int, sensitivity: Float) = viewModelScope.launch {
+    fun tuneSection(section: Int, skip: Int, sensitivity: Float, tailMs: Int) = viewModelScope.launch {
         updateUser(save = false) { u ->
-            u.copy(sectionAudio = u.sectionAudio + (section.toString() to SectionAudio(skip, sensitivity)))
+            u.copy(sectionAudio = u.sectionAudio + (section.toString() to
+                SectionAudio(skip = skip, sensitivity = sensitivity, tailMs = tailMs)))
         }
         _state.update { it.copy(busy = "音声を分割しています…") }
         runCatching { segments(section, force = true) }
