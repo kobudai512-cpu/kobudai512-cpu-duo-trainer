@@ -16,6 +16,6 @@ captures/
 *.mp3
 *.m4a
 *.wav
-data/
+/data/
 DUO*.txt
 *_DUO*.txt
