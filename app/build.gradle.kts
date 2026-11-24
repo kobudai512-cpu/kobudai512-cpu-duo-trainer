@@ -60,7 +60,11 @@ android {
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
-        unitTests.all { it.systemProperty("duo.file", System.getProperty("duo.file") ?: "") }
+        unitTests.all {
+            it.systemProperty("duo.file", System.getProperty("duo.file") ?: "")
+            // CI では Robolectric の大きな jar を Maven Central のミラーから取る（Central は IP ごとの制限がある）
+            System.getenv("ROBOLECTRIC_REPO_URL")?.let { url -> it.systemProperty("robolectric.dependency.repo.url", url) }
+        }
     }
 }
 

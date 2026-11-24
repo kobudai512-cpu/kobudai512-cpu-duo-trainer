@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # Google が運営している Maven Central のミラー（Robolectric 用）
+  ROBOLECTRIC_REPO_URL: https://maven-central.storage-download.googleapis.com/maven2/
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,7 +44,7 @@ jobs:
         run: ./gradlew --no-daemon testDebugUnitTest --tests 'app.duotrainer.core.*'
 
       # Robolectric が使う Android の jar は大きく、Maven Central の制限にかかりやすいのでキャッシュする
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: ~/.m2/repository/org/robolectric
           key: robolectric-android-all-v1
@@ -55,6 +59,12 @@ jobs:
           done
           grep -E "DRAG|FAILED|Assertion" ui-test.log || true
           [ "${ok:-0}" = 1 ]
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-android-all-v1
 
       # 画面のスクリーンショット（自作サンプル例文で描画）。失敗しても APK は作る。
       - name: Screenshots
