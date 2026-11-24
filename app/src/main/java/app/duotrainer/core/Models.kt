@@ -55,14 +55,14 @@ data class Deck(
 @Serializable
 enum class Rating(val label: String) {
     WEAK("苦手"),
-    GOOD("得意"),
-    MASTERED("覚えた"),
+    GOOD("正解"),
+    MASTERED("簡単"),
 }
 
 /** 答える前に選ぶ自信度。復習間隔の調整に使う。 */
 @Serializable
 enum class Confidence(val label: String) {
-    LOW("自信なし"),
+    LOW("わからない"),
     MID("たぶん"),
     HIGH("自信あり"),
 }
@@ -93,16 +93,16 @@ data class DayLog(
 )
 
 enum class StudyMode(val label: String, val description: String) {
-    FREE("和文英訳（入力）", "日本語を見て英文を書いて答え合わせ"),
-    SELF("和文英訳（判定）", "頭の中で英訳して、答えを見て自分で判定"),
+    FREE("和文英訳（入力あり）", "英文を書いて答え合わせ"),
+    SELF("和文英訳（入力なし）", "頭の中で英訳して自分で判定"),
     CLOZE("穴埋め", "重要語だけを空欄に"),
     PUZZLE("語順パズル", "単語を並べ替えて英文に"),
     DICTATION("ディクテーション", "音声を聞いて書き取る"),
     SHADOWING("シャドーイング", "音声に合わせて声に出す"),
-    WORD("単語テスト", "意味から見出し語を選ぶ"),
+    WORD("単語テスト", "意味から英単語を選ぶ"),
     ;
 
-    /** 和文英訳だけが「覚えた」まで進める本番。ほかのモードは練習。 */
+    /** 和文英訳だけが例文の仕分け（苦手・正解・簡単）に入る本番。ほかのモードは練習。 */
     val isTranslation: Boolean get() = this == FREE || this == SELF
 }
 

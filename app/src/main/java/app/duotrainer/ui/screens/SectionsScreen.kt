@@ -94,10 +94,10 @@ fun SectionsScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("DUO 3.0", style = MaterialTheme.typography.titleLarge)
-                    Text("例文 ${deck.sentences.size} ・ 見出し語 ${deck.words.size}", style = MaterialTheme.typography.bodySmall,
+                    Text("例文 ${deck.sentences.size} ・ 単語 ${deck.words.size}", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     CategoryBar(all, height = 8.dp)
-                    Text("覚えた ${all[Category.MASTERED] ?: 0} 文", style = MaterialTheme.typography.labelMedium,
+                    Text("簡単 ${all[Category.MASTERED] ?: 0} 文", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary)
                 }
             }

@@ -141,7 +141,7 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
             }
         }
         Text(
-            "和文英訳は「今日の復習」から、そのほかは前回のセクション（Section ${user.lastSection}）から練習として出題します。「覚えた」にできるのは和文英訳だけです。",
+            "和文英訳は「今日の復習」から、そのほかは前回のセクション（Section ${user.lastSection}）から練習として出題します。例文の仕分け（苦手・正解・簡単）に入るのは和文英訳だけです。",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
@@ -170,7 +170,7 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text("${counts[Category.MASTERED] ?: 0}", style = MaterialTheme.typography.headlineMedium)
-                    Text(" / ${deck.sentences.size} 文 覚えた", style = MaterialTheme.typography.bodyMedium,
+                    Text(" / ${deck.sentences.size} 文が「簡単」", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
                 }
                 CategoryBar(counts)
@@ -248,8 +248,8 @@ private fun TodayCard(due: Int, fresh: Int, answered: Int, goal: Int, onStart: (
                     Icon(Icons.Rounded.Psychology, null)
                     Spacer(Modifier.width(6.dp))
                     Column {
-                        Text("頭で英訳", style = MaterialTheme.typography.titleSmall)
-                        Text("自分で判定", style = MaterialTheme.typography.labelSmall)
+                        Text("入力なし", style = MaterialTheme.typography.titleSmall)
+                        Text("頭の中で英訳", style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 Button(
@@ -260,8 +260,8 @@ private fun TodayCard(due: Int, fresh: Int, answered: Int, goal: Int, onStart: (
                     Icon(Icons.Rounded.Edit, null)
                     Spacer(Modifier.width(6.dp))
                     Column {
-                        Text("書いて英訳", style = MaterialTheme.typography.titleSmall)
-                        Text("入力して答え合わせ", style = MaterialTheme.typography.labelSmall)
+                        Text("入力あり", style = MaterialTheme.typography.titleSmall)
+                        Text("書いて答え合わせ", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

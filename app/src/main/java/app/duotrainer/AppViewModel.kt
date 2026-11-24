@@ -11,6 +11,8 @@ import app.duotrainer.core.Category
 import app.duotrainer.core.Confidence
 import app.duotrainer.core.DayLog
 import app.duotrainer.core.Deck
+import app.duotrainer.core.Progress
+import app.duotrainer.core.TextUtil
 import app.duotrainer.core.Keys
 import app.duotrainer.core.Planner
 import app.duotrainer.core.Question
@@ -96,14 +98,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun importDeck(uri: Uri) = viewModelScope.launch {
         _state.update { it.copy(busy = "例文データを解析しています…") }
+        val old = _state.value.deck
         runCatching { store.importDeck(uri) }
             .onSuccess { deck ->
+                // 例文の並びが変わっても（誤字修正・順番の修正）、学習記録は英文で照らし合わせて引き継ぐ
+                if (old != null) updateUser { u -> u.copy(progress = remapProgress(u.progress, old, deck)) }
                 _state.update {
                     it.copy(deck = deck, busy = null,
                         message = "${deck.sentences.size} 文・${deck.words.size} 語を読み込みました")
                 }
             }
             .onFailure { e -> _state.update { it.copy(busy = null, message = e.message ?: "読み込みに失敗しました") } }
+    }
+
+    private fun remapProgress(progress: Map<String, Progress>, old: Deck, new: Deck): Map<String, Progress> {
+        fun norm(s: String) = TextUtil.normalizeWords(s).joinToString(" ")
+        val newSentence = new.sentences.groupBy { norm(it.en) }
+        val newWord = new.words.groupBy { it.section to norm(it.en) }
+        fun sentenceId(id: Int): Int? {
+            val s = old.sentence(id) ?: return id
+            val cands = newSentence[norm(s.en)]
+            // 英文が直された文は、同じ番号のまま引き継ぐ
+            return cands?.minByOrNull { kotlin.math.abs(it.id - id) }?.id ?: new.sentence(id)?.id
+        }
+        fun wordId(id: Int): Int? {
+            val w = old.word(id) ?: return id
+            return newWord[w.section to norm(w.en)]?.minByOrNull { kotlin.math.abs(it.id - id) }?.id ?: new.word(id)?.id
+        }
+        val out = HashMap<String, Progress>()
+        for ((key, p) in progress) {
+            val parts = key.split(':')
+            val newKey = when {
+                parts[0] == "s" -> sentenceId(parts[1].toInt())?.let { "s:$it" }
+                parts[0] == "w" -> wordId(parts[1].toInt())?.let { "w:$it" }
+                parts[0] == "p" && parts.size == 3 -> sentenceId(parts[2].toInt())?.let { "p:${parts[1]}:$it" }
+                else -> key
+            } ?: continue
+            out[newKey] = p
+        }
+        return out
     }
 
     fun setAudioFolder(tree: Uri) = viewModelScope.launch {
@@ -233,7 +266,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun preview(q: Question, rating: Rating, confidence: Confidence?): String =
-        if (q.relearn) "予定は明日のまま" else Srs.preview(_state.value.user.progress[q.key], rating, confidence)
+        if (q.relearn) "確認用（予定は明日）" else Srs.preview(_state.value.user.progress[q.key], rating, confidence)
 
     // ---------- 音声 ----------
 

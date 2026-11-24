@@ -49,7 +49,7 @@ object Srs {
         }
         val bonus = if (rating == Rating.MASTERED) 1.3 else 1.0
         var days = (base * conf * bonus).roundToInt().coerceIn(1, MAX_INTERVAL)
-        // 思い出せたのに前回より短くはしない（自信なしのときを除く）
+        // 思い出せたのに前回より短くはしない（「わからない」のときを除く）
         if (confidence != Confidence.LOW) days = maxOf(days, minOf(prev + 1, MAX_INTERVAL))
         if (rating == Rating.MASTERED) days = maxOf(days, 4)
         return Plan(days, ease)

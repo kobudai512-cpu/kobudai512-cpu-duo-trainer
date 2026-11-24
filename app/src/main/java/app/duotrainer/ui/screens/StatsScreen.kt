@@ -172,7 +172,7 @@ fun StatsScreen(state: UiState, vm: AppViewModel) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("色が濃いほど「覚えた」「得意」が多いセクションです。", style = MaterialTheme.typography.labelSmall,
+                Text("色が濃いほど「簡単」「正解」が多いセクションです。", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

@@ -73,7 +73,7 @@ fun SettingsScreen(state: UiState, vm: AppViewModel) {
                 HorizontalDivider()
                 Stepper("1 日の目標（問）", s.dailyGoal, 5..200, step = 5) { v -> vm.updateSettings { it.copy(dailyGoal = v) } }
                 HorizontalDivider()
-                Toggle("インターリービングのひと言を表示", "「今は難しく感じて大丈夫」", s.interleaveHint) { v -> vm.updateSettings { it.copy(interleaveHint = v) } }
+                Toggle("セクションを混ぜたときの声かけ", "「今は難しく感じて大丈夫」を表示", s.interleaveHint) { v -> vm.updateSettings { it.copy(interleaveHint = v) } }
             }
         }
 

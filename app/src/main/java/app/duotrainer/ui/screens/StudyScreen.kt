@@ -224,13 +224,16 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
                     ConfidenceButtons(
                         enabled = canCheck,
                         hint = when (q.mode) {
-                            StudyMode.SELF -> "英訳できたら、自信度を選ぶと答えが出ます"
-                            StudyMode.PUZZLE -> if (canCheck) "自信度を選ぶと答え合わせ" else "すべての単語を並べてから"
-                            StudyMode.WORD -> if (canCheck) "自信度を選ぶと答え合わせ" else "選択肢を選んでから"
-                            else -> "答えを書いたら、自信度を選ぶと答え合わせ"
+                            StudyMode.SELF -> "英訳してから選ぶと、答えが出ます"
+                            StudyMode.PUZZLE -> if (canCheck) "選ぶと答え合わせ" else "単語をすべて並べてから選んでください"
+                            StudyMode.WORD -> if (canCheck) "選ぶと答え合わせ" else "選択肢を選んでから"
+                            else -> "答えを書いてから選ぶと、答え合わせ"
                         },
-                        onGiveUp = { a.gaveUp = true; a.confidence = Confidence.LOW; a.revealed = true },
-                    ) { c -> a.confidence = c; a.revealed = true }
+                    ) { c ->
+                        a.confidence = c
+                        if (c == Confidence.LOW && q.mode == StudyMode.SELF) a.gaveUp = true
+                        a.revealed = true
+                    }
                 } else if (!a.revealed) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { a.gaveUp = true; a.revealed = true }) { Text("わからない") }
@@ -558,14 +561,11 @@ private fun WordQuestion(w: Word, a: Answer, deck: Deck, vm: AppViewModel) {
 }
 
 @Composable
-private fun ConfidenceButtons(enabled: Boolean, hint: String, onGiveUp: () -> Unit, onSelect: (Confidence) -> Unit) {
+private fun ConfidenceButtons(enabled: Boolean, hint: String, onSelect: (Confidence) -> Unit) {
     val status = StatusPalette.current
     Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("自信は？  $hint", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            TextButton(onClick = onGiveUp) { Text("わからない") }
-        }
+        Text("自信は？  $hint", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Confidence.entries.forEach { c ->
@@ -603,7 +603,7 @@ private fun Feedback(q: Question, a: Answer, deck: Deck, vm: AppViewModel) {
                     Text("あなたの答え", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f))
                     val pct = (d.score * 100).toInt()
-                    Text("一致 $pct%", style = MaterialTheme.typography.titleSmall,
+                    Text("一致度 $pct%", style = MaterialTheme.typography.titleSmall,
                         color = if (pct >= 90) status.mastered else if (pct >= 60) status.good else status.weak)
                 }
                 Spacer(Modifier.height(6.dp))
@@ -645,11 +645,11 @@ private fun Feedback(q: Question, a: Answer, deck: Deck, vm: AppViewModel) {
 @Composable
 private fun RatingButtons(q: Question, confidence: Confidence?, suggested: Rating, vm: AppViewModel, onRate: (Rating) -> Unit) {
     val status = StatusPalette.current
-    // 「覚えた」は和文英訳だけ。練習モードは 苦手 / 得意 の 2 つ。
+    // 「簡単」は和文英訳だけ。練習モードは 苦手 / 正解 の 2 つ。
     val ratings = if (q.mode.isTranslation) Rating.entries else listOf(Rating.WEAK, Rating.GOOD)
     Column {
     if (!q.mode.isTranslation) Text(
-        "練習モードの結果は「覚えた」には反映されません（覚えたは和文英訳で）",
+        "練習モードの結果は例文の仕分けに入りません（仕分けは和文英訳だけ）",
         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
     )
