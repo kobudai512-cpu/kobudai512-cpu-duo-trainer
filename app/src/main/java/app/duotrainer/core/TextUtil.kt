@@ -120,7 +120,7 @@ object TextUtil {
         "sink" to "sank sunk", "sting" to "stung", "swim" to "swam swum", "be" to "is am are was were been",
         "feed" to "fed", "lead" to "led", "deal" to "dealt", "build" to "built", "bend" to "bent",
         "stick" to "stuck", "hear" to "heard", "understand" to "understood", "arise" to "arose arisen", "become" to "became",
-        "would" to "i'd you'd he'd she'd we'd they'd", "had" to "i'd you'd he'd she'd we'd they'd", "will" to "i'll you'll he'll she'll we'll they'll it'll",
+        "would" to "i'd you'd he'd she'd we'd they'd", "had" to "i'd you'd he'd she'd we'd they'd", "that" to "those", "this" to "these", "will" to "i'll you'll he'll she'll we'll they'll it'll",
     ).mapValues { it.value.split(' ').toSet() }
 
     /** トークンが見出し語の 1 語（活用形を含む）に当たるか。 */

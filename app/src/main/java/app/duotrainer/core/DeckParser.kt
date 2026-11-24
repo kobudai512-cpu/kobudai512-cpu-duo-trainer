@@ -56,7 +56,7 @@ object DeckParser {
 
 /** 例文と見出し語を結び付ける。 */
 object Aligner {
-    const val VERSION = 4
+    const val VERSION = 5
 
     fun align(sentences: List<DeckParser.RawSentence>, words: List<DeckParser.RawWord>): Deck {
         val sentTokens = sentences.map { TextUtil.tokens(it.en) }
