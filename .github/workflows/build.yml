@@ -39,6 +39,10 @@ jobs:
       - name: Unit tests (core logic)
         run: ./gradlew --no-daemon testDebugUnitTest --tests 'app.duotrainer.core.*'
 
+      # 語順パズルのドラッグ（画面の操作テスト）
+      - name: UI test (puzzle drag)
+        run: ./gradlew --no-daemon testDebugUnitTest --tests 'app.duotrainer.ui.ScreenshotTest.puzzleDragReorders'
+
       # 画面のスクリーンショット（自作サンプル例文で描画）。失敗しても APK は作る。
       - name: Screenshots
         continue-on-error: true

@@ -433,18 +433,23 @@ private fun PuzzleView(a: Answer) {
     var dragFrom by remember(a) { mutableStateOf<Int?>(null) }
     var dragOffset by remember(a) { mutableStateOf(Offset.Zero) }
 
+    /** 指の位置にいちばん近い単語（そこに入る）。 */
+    fun targetIndex(): Int? {
+        val from = dragFrom ?: return null
+        val start = bounds[from] ?: return null
+        val p = start.center + dragOffset
+        val live = bounds.filterKeys { it < a.picked.size }
+        return live.entries.firstOrNull { it.value.contains(p) }?.key
+            ?: live.entries.minByOrNull { (it.value.center - p).getDistance() }?.key
+    }
+    val hover = if (dragFrom != null) targetIndex() else null
+
     fun drop() {
-        val from = dragFrom ?: return
-        val start = bounds[from]
-        if (start != null) {
-            val p = start.center + dragOffset
-            val live = bounds.filterKeys { it < a.picked.size }
-            val target = live.entries.firstOrNull { it.value.contains(p) }?.key
-                ?: live.entries.minByOrNull { (it.value.center - p).getDistance() }?.key
-            if (target != null && target != from) {
-                val item = a.picked.removeAt(from)
-                a.picked.add(target.coerceIn(0, a.picked.size), item)
-            }
+        val from = dragFrom
+        val target = targetIndex()
+        if (from != null && target != null && target != from && from < a.picked.size) {
+            val item = a.picked.removeAt(from)
+            a.picked.add(target.coerceIn(0, a.picked.size), item)
         }
         dragFrom = null
         dragOffset = Offset.Zero
@@ -460,21 +465,17 @@ private fun PuzzleView(a: Answer) {
                     val currentPos by rememberUpdatedState(pos)
                     val dragging = dragFrom == pos
                     val color = when {
+                        !a.revealed && hover == pos && !dragging -> MaterialTheme.colorScheme.tertiary  // ここに入る
                         !a.revealed -> MaterialTheme.colorScheme.primary
                         a.pieces[pos] == a.pieces[idx] -> status.mastered
                         else -> status.weak
                     }
                     PieceChip(
                         a.pieces[idx], filled = true, color = color,
+                        // ドラッグの検出は「動く層」より外側に置く（内側だと指と一緒に座標が動いて、移動量が 0 になる）
                         modifier = Modifier
                             .onGloballyPositioned { bounds[currentPos] = it.boundsInRoot() }
                             .zIndex(if (dragging) 1f else 0f)
-                            .graphicsLayer {
-                                if (dragging) {
-                                    translationX = dragOffset.x; translationY = dragOffset.y
-                                    scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 12f
-                                }
-                            }
                             .pointerInput(a.revealed) {
                                 if (a.revealed) return@pointerInput
                                 detectDragGestures(
@@ -483,6 +484,12 @@ private fun PuzzleView(a: Answer) {
                                     onDragEnd = { drop() },
                                     onDragCancel = { dragFrom = null; dragOffset = Offset.Zero },
                                 )
+                            }
+                            .graphicsLayer {
+                                if (dragging) {
+                                    translationX = dragOffset.x; translationY = dragOffset.y
+                                    scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 12f
+                                }
                             },
                     ) { if (!a.revealed) a.picked.removeAt(currentPos) }
                 }

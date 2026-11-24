@@ -4,6 +4,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import kotlin.test.assertTrue
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -135,6 +137,30 @@ class ScreenshotTest {
         compose.onNodeWithText("She").performClick()
         compose.onNodeWithText("decided").performClick()
         compose.onRoot().captureRoboImage("../docs/screenshots/puzzle.png")
+    }
+
+    /** 語順パズル：並べた単語をドラッグして、別の単語の位置に入れられること。 */
+    @Test fun puzzleDragReorders() {
+        val vm = vm(session(StudyMode.PUZZLE, 4))
+        compose.setContent { DuoTheme { StudyScreen(vm.state.value, vm) } }
+        // わざと最後の 2 語を逆に並べる: She decided to study abroad year. next
+        listOf("She", "decided", "to", "study", "abroad", "year.", "next").forEach {
+            compose.onNodeWithText(it).performClick()
+        }
+        compose.waitForIdle()
+        fun left(t: String) = compose.onNodeWithText(t).fetchSemanticsNode().boundsInRoot.left
+        fun center(t: String) = compose.onNodeWithText(t).fetchSemanticsNode().boundsInRoot.center
+        assertTrue(left("year.") < left("next"))
+        // "next" を "year." の上までドラッグ
+        val delta = center("year.") - center("next")
+        compose.onNodeWithText("next").performTouchInput {
+            down(center)
+            repeat(10) { moveBy(delta / 10f, delayMillis = 16) }
+            up()
+        }
+        compose.waitForIdle()
+        assertTrue(left("next") < left("year."), "ドラッグで next が year. の前に入るはず")
+        compose.onRoot().captureRoboImage("../docs/screenshots/puzzle_drag.png")
     }
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onRoot() =
