@@ -105,6 +105,8 @@ import app.duotrainer.ui.theme.StatusPalette
 /** 1 問ぶんの回答の状態。 */
 private class Answer(q: Question, deck: Deck, choices: List<Word>) {
     var text by mutableStateOf("")
+    /** 音声入力を使ったか（聞き分けにくい語の違いを大目に見る） */
+    var spoken by mutableStateOf(false)
     var revealed by mutableStateOf(false)
     var confidence by mutableStateOf<Confidence?>(null)
     var gaveUp by mutableStateOf(false)
@@ -131,7 +133,10 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
 
     val mic = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val said = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (!said.isNullOrBlank()) a.text = if (a.text.isBlank()) said else a.text.trimEnd() + " " + said
+        if (!said.isNullOrBlank()) {
+            a.text = if (a.text.isBlank()) said else a.text.trimEnd() + " " + said
+            a.spoken = true
+        }
     }
     val launchMic = {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -261,8 +266,8 @@ private fun suggestedRating(q: Question, a: Answer): Rating {
         StudyMode.WORD -> a.choices.getOrNull(a.choice ?: -1)?.id == q.word?.id
         StudyMode.CLOZE -> a.cloze?.blanks?.all { TextUtil.sameWord(it.answer, a.blanks[it.index]) } == true
         StudyMode.PUZZLE -> a.picked.map { a.pieces[it] } == a.pieces
-        StudyMode.SHADOWING -> a.text.isBlank() || TextUtil.diff(q.sentence!!.en, a.text).score >= 0.85f
-        else -> TextUtil.diff(q.sentence!!.en, a.text).score >= 0.9f
+        StudyMode.SHADOWING -> a.text.isBlank() || TextUtil.diff(q.sentence!!.en, a.text, a.spoken).score >= 0.85f
+        else -> TextUtil.diff(q.sentence!!.en, a.text, a.spoken).score >= 0.9f
     }
     return if (!ok) Rating.WEAK
     else if (a.confidence == Confidence.HIGH && q.mode.isTranslation) Rating.MASTERED else Rating.GOOD
@@ -326,15 +331,10 @@ private fun SentenceQuestion(q: Question, s: Sentence, a: Answer, deck: Deck, vm
         }
         StudyMode.SHADOWING -> {
             ListenCard(s, vm)
-            AppCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
-                    Text(highlightKeywords(s, deck, MaterialTheme.colorScheme.primary), style = SentenceStyle)
-                    Spacer(Modifier.height(8.dp))
-                    Text(s.ja, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            // 最初は日本語だけ。英文は「答えを見る」で表示する
+            JapaneseCard(s.ja)
             Text(
-                "音声のすぐ後を追いかけるように声に出しましょう。マイクで話すと、言えたかどうかを確認できます。",
+                "英文は見ずに、音声のすぐ後を追いかけるように声に出しましょう。マイクで話すと、言えたかどうかを確認できます。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!a.revealed) FilledTonalButton(onClick = onMic, modifier = Modifier.fillMaxWidth().height(52.dp)) {
@@ -603,7 +603,7 @@ private fun Feedback(q: Question, a: Answer, deck: Deck, vm: AppViewModel) {
         else -> null
     }
     if (!typed.isNullOrBlank()) {
-        val d = remember(typed, s.en) { TextUtil.diff(s.en, typed) }
+        val d = remember(typed, s.en, a.spoken) { TextUtil.diff(s.en, typed, a.spoken) }
         AppCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -616,7 +616,8 @@ private fun Feedback(q: Question, a: Answer, deck: Deck, vm: AppViewModel) {
                 Spacer(Modifier.height(6.dp))
                 Text(diffText(d, status.weak, status.streak), style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.height(4.dp))
-                Text("赤の取り消し線＝余分な語、オレンジの下線＝抜けている語", style = MaterialTheme.typography.labelSmall,
+                Text("赤の取り消し線＝余分な語、オレンジの下線＝抜けている語、紫＝つづり違い（書いた語→正しい語）" +
+                    if (a.spoken) "。音声入力なので of / off のような聞き分けにくい違いは正解にしています" else "", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -708,6 +709,9 @@ private fun diffText(d: TextUtil.DiffResult, extra: Color, missing: Color): Anno
         when (p.kind) {
             TextUtil.DiffKind.MATCH -> append(p.text)
             TextUtil.DiffKind.EXTRA -> withStyle(SpanStyle(color = extra, textDecoration = TextDecoration.LineThrough)) { append(p.text) }
+            TextUtil.DiffKind.TYPO -> withStyle(SpanStyle(color = Color(0xFF8E5CF7), fontWeight = FontWeight.Bold)) {
+                append("${p.wrote}→${p.text}")
+            }
             TextUtil.DiffKind.MISSING -> withStyle(
                 SpanStyle(color = missing, fontWeight = FontWeight.Bold, textDecoration = TextDecoration.Underline)
             ) { append(p.text) }

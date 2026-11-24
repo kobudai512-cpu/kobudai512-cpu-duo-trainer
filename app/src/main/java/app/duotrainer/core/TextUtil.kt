@@ -264,32 +264,78 @@ object TextUtil {
             .filter { it.isNotBlank() }
     }
 
-    enum class DiffKind { MATCH, MISSING, EXTRA }
-    data class DiffPart(val text: String, val kind: DiffKind)
+    /** MATCH 一致 / MISSING 抜け / EXTRA 余分 / TYPO つづり違い（text が正しい語、wrote が書いた語） */
+    enum class DiffKind { MATCH, MISSING, EXTRA, TYPO }
+    data class DiffPart(val text: String, val kind: DiffKind, val wrote: String? = null)
+
+    fun editDistance(a: String, b: String): Int {
+        var prev = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val cur = IntArray(b.length + 1); cur[0] = i
+            for (j in 1..b.length) cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            prev = cur
+        }
+        return prev[b.length]
+    }
+
+    private val HOMOPHONES = listOf(
+        setOf("to", "too", "two"), setOf("their", "there", "they're"), setOf("its", "it's"),
+        setOf("your", "you're"), setOf("know", "no"), setOf("right", "write"), setOf("hear", "here"),
+        setOf("for", "four"), setOf("by", "buy", "bye"), setOf("one", "won"), setOf("weather", "whether"),
+    )
+
+    /** 音声入力で聞き分けにくい語（of / off、to / too など）は同じとみなす。 */
+    private fun soundsAlike(x: String, y: String): Boolean =
+        HOMOPHONES.any { x in it && y in it } || (minOf(x.length, y.length) >= 2 && editDistance(x, y) <= 1)
+
+    /** 書き間違い（スペルミス）とみなす近さ。 */
+    private fun isTypo(x: String, y: String): Boolean =
+        editDistance(x, y) <= maxOf(1, minOf(x.length, y.length) / 3)
     data class DiffResult(val parts: List<DiffPart>, val score: Float) {
         val isPerfect: Boolean get() = score >= 0.999f
     }
 
     /** 正解文と回答を単語単位の LCS で比較する。score は 0..1。 */
-    fun diff(expected: String, answer: String): DiffResult {
+    /**
+     * 正解文と回答を単語単位で比べる。
+     * spoken = true（音声入力）のときは、of / off のような聞き分けにくい違いを一致とみなす。
+     * 書き間違いは「余分な語＋抜けた語」ではなく「つづり違い（of → off）」として 1 つにまとめる。
+     */
+    fun diff(expected: String, answer: String, spoken: Boolean = false): DiffResult {
         val e = normalizeWords(expected)
         val a = normalizeWords(answer)
         if (e.isEmpty()) return DiffResult(emptyList(), if (a.isEmpty()) 1f else 0f)
+        fun same(x: String, y: String) = x == y || (spoken && soundsAlike(x, y))
         val dp = Array(e.size + 1) { IntArray(a.size + 1) }
         for (i in e.indices.reversed()) for (j in a.indices.reversed()) {
-            dp[i][j] = if (e[i] == a[j]) dp[i + 1][j + 1] + 1 else maxOf(dp[i + 1][j], dp[i][j + 1])
+            dp[i][j] = if (same(e[i], a[j])) dp[i + 1][j + 1] + 1 else maxOf(dp[i + 1][j], dp[i][j + 1])
         }
-        val parts = mutableListOf<DiffPart>()
+        val raw = mutableListOf<DiffPart>()
         var i = 0; var j = 0
         while (i < e.size || j < a.size) {
             when {
-                i < e.size && j < a.size && e[i] == a[j] -> { parts += DiffPart(e[i], DiffKind.MATCH); i++; j++ }
-                j < a.size && (i == e.size || dp[i][j + 1] >= dp[i + 1][j]) -> { parts += DiffPart(a[j], DiffKind.EXTRA); j++ }
-                else -> { parts += DiffPart(e[i], DiffKind.MISSING); i++ }
+                i < e.size && j < a.size && same(e[i], a[j]) && dp[i][j] == dp[i + 1][j + 1] + 1 -> {
+                    raw += DiffPart(e[i], DiffKind.MATCH); i++; j++
+                }
+                j < a.size && (i == e.size || dp[i][j + 1] >= dp[i + 1][j]) -> { raw += DiffPart(a[j], DiffKind.EXTRA); j++ }
+                else -> { raw += DiffPart(e[i], DiffKind.MISSING); i++ }
             }
         }
-        // 抜けも余計な単語も同じ重さで減点する（F1 と同じ形）
-        val score = 2f * dp[0][0] / (e.size + a.size)
+        // となり合った「余分」と「抜け」が似た語なら、つづり違いとしてまとめる
+        val parts = mutableListOf<DiffPart>()
+        var k = 0
+        while (k < raw.size) {
+            val x = raw[k]; val y = raw.getOrNull(k + 1)
+            if (y != null && x.kind != y.kind && setOf(x.kind, y.kind) == setOf(DiffKind.EXTRA, DiffKind.MISSING)) {
+                val exp = if (x.kind == DiffKind.MISSING) x.text else y.text
+                val wrote = if (x.kind == DiffKind.EXTRA) x.text else y.text
+                if (isTypo(exp, wrote)) { parts += DiffPart(exp, DiffKind.TYPO, wrote); k += 2; continue }
+            }
+            parts += x; k++
+        }
+        // 抜けも余計な単語も同じ重さで減点する（F1 と同じ形）。つづり違いは半分だけ正解扱い
+        val hits = parts.count { it.kind == DiffKind.MATCH } + 0.5f * parts.count { it.kind == DiffKind.TYPO }
+        val score = 2f * hits / (e.size + a.size)
         return DiffResult(parts, score.coerceIn(0f, 1f))
     }
 

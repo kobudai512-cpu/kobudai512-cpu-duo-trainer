@@ -97,6 +97,17 @@ class CoreTest {
         assertTrue(r2.parts.any { it.kind == TextUtil.DiffKind.MISSING && it.text == "up" })
     }
 
+    @Test fun diffHandlesTyposAndSpeech() {
+        val e = "After making sure she was sound asleep, he crept out of the room and set off."
+        assertTrue(TextUtil.diff(e, "after making sure she was sound asleep he crept out of the room and set off").isPerfect)
+        // 音声入力で off が of と認識されても正解
+        assertTrue(TextUtil.diff(e, "after making sure she was sound asleep he crept out of the room and set of", spoken = true).isPerfect)
+        // 手で打った of は「つづり違い of→off」1 つにまとまる（余分＋抜けにならない）
+        val typed = TextUtil.diff(e, "after making sure she was sound asleep he crept out of the room and set of")
+        assertEquals(1, typed.parts.count { it.kind == TextUtil.DiffKind.TYPO })
+        assertTrue(typed.parts.none { it.kind == TextUtil.DiffKind.EXTRA || it.kind == TextUtil.DiffKind.MISSING })
+    }
+
     @Test fun srsGrowsLittleByLittle() {
         // 毎回「得意」: 1 日 → 3 日 → 約 1 週間 → 約 2〜3 週間 → 約 1〜2 か月
         var p: Progress? = null
