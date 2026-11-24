@@ -120,13 +120,15 @@ object TextUtil {
         "sink" to "sank sunk", "sting" to "stung", "swim" to "swam swum", "be" to "is am are was were been",
         "feed" to "fed", "lead" to "led", "deal" to "dealt", "build" to "built", "bend" to "bent",
         "stick" to "stuck", "hear" to "heard", "understand" to "understood", "arise" to "arose arisen", "become" to "became",
-        "would" to "i'd you'd he'd she'd we'd they'd", "will" to "i'll you'll he'll she'll we'll they'll it'll",
+        "would" to "i'd you'd he'd she'd we'd they'd", "had" to "i'd you'd he'd she'd we'd they'd", "will" to "i'll you'll he'll she'll we'll they'll it'll",
     ).mapValues { it.value.split(' ').toSet() }
 
     /** トークンが見出し語の 1 語（活用形を含む）に当たるか。 */
     fun matchesKey(token: Token, key: String): Boolean =
         (key.startsWith("-") && token.lower.length > key.length && token.lower.endsWith(key.drop(1))) ||
-        (!key.startsWith("-") && token.lower.startsWith(stem(key))) || IRREGULAR[key]?.contains(token.lower) == true ||
+        (!key.startsWith("-") && token.lower.startsWith(stem(key))) ||
+        // fly → flies, carry → carried
+        (key.length >= 3 && key.endsWith("y") && token.lower.startsWith(key.dropLast(1) + "i")) || IRREGULAR[key]?.contains(token.lower) == true ||
             // "～-year-old" "～-fold" のような後ろに付く語（five-year-old, three-fold）
             (key.contains('-') && token.lower.contains(key)) || token.lower.endsWith("-$key")
 
@@ -171,6 +173,34 @@ object TextUtil {
      *   "at any moment"    → at, any, moment
      */
     fun findPhrase(headword: String, sentence: List<Token>): List<Int>? {
+        findPattern(headword, sentence)?.let { return it }
+        findPhraseExact(headword, sentence)?.let { return it }
+        // 最後の手段：1 語の見出し語が合成語の後ろに付いている（ache → headache）
+        val single = wordsOf(alternatives(headword).firstOrNull() ?: return null)
+        if (single.size == 1 && single[0].length >= 4 && !single[0].startsWith("-")) {
+            val w = single[0].lowercase()
+            sentence.indices.firstOrNull { sentence[it].lower.length >= w.length + 3 && sentence[it].lower.endsWith(w) }
+                ?.let { return listOf(it) }
+        }
+        return null
+    }
+
+    /** 語ではなく「型」を表す見出し語（the 比較級 …, the 比較級 … / as ～ as）。 */
+    private fun findPattern(headword: String, s: List<Token>): List<Int>? {
+        fun comparative(t: Token) = t.lower == "more" || t.lower == "less" || (t.lower.length > 4 && t.lower.endsWith("er"))
+        if (headword.contains("比較級")) {
+            val firsts = s.indices.filter { it + 1 < s.size && s[it].lower == "the" && comparative(s[it + 1]) }
+            if (firsts.size >= 2) return firsts.take(2).flatMap { listOf(it, it + 1) }
+            return null
+        }
+        if (Regex("^\\s*as\\s*[～~]\\s*as").containsMatchIn(headword)) {
+            val i = (0 until s.size - 2).firstOrNull { s[it].lower == "as" && s[it + 2].lower == "as" } ?: return null
+            return listOf(i, i + 1, i + 2)
+        }
+        return null
+    }
+
+    private fun findPhraseExact(headword: String, sentence: List<Token>): List<Int>? {
         for (alt in alternatives(headword)) {
             val words = wordsOf(alt)
             if (words.isEmpty()) continue

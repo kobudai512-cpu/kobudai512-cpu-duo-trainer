@@ -56,7 +56,7 @@ object DeckParser {
 
 /** 例文と見出し語を結び付ける。 */
 object Aligner {
-    const val VERSION = 3
+    const val VERSION = 4
 
     fun align(sentences: List<DeckParser.RawSentence>, words: List<DeckParser.RawWord>): Deck {
         val sentTokens = sentences.map { TextUtil.tokens(it.en) }
@@ -109,9 +109,7 @@ object Aligner {
             val sec = words[wi].section
             val order = sentences.indices.sortedBy { kotlin.math.abs(secOf[it] - sec) }
             wordSentence[wi] = order.firstOrNull {
-                kotlin.math.abs(secOf[it] - sec) <= 1 &&
-                    (if (keys[wi].isEmpty()) TextUtil.findPhrase(words[wi].en, sentTokens[it]) != null
-                    else TextUtil.findKeys(keys[wi], sentTokens[it]) != null)
+                kotlin.math.abs(secOf[it] - sec) <= 1 && TextUtil.findPhrase(words[wi].en, sentTokens[it]) != null
             }
         }
 

@@ -73,6 +73,11 @@ class CoreTest {
         assertEquals(listOf("make", "heads", "or", "tails", "of"), blanks("cannot make heads or tails of ～", "they couldn't make heads or tails of them."))
         assertEquals(listOf("damage", "to"), blanks("do[cause] ～ damage toA", "The drought did severe damage to the crops."))
         assertEquals(listOf("looking", "forward", "to"), blanks("look forward to ～ing", "I'm looking forward to seeing you."))
+        assertEquals(listOf("We'd", "better"), blanks("had better do", "We'd better make a reservation."))
+        assertEquals(listOf("headache"), blanks("ache", "It will cure you of your headache."))
+        assertEquals(listOf("Flies"), blanks("fly", "Flies and mosquitoes interfered."))
+        assertEquals(listOf("The", "more", "the", "more"), blanks("the 比較級 S+V、the 比較級 S+V", "The more stubborn you are, the more isolated you become."))
+        assertEquals(listOf("as", "many", "as"), blanks("as ～ as…（～=much/many/recently/high/farなど）", "The motel can accommodate as many as 400 guests."))
     }
 
     @Test fun clozeBlanksKeywords() {
