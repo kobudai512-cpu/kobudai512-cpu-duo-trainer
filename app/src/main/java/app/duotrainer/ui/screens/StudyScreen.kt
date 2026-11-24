@@ -447,6 +447,7 @@ private fun PuzzleView(a: Answer) {
     fun drop() {
         val from = dragFrom
         val target = targetIndex()
+        println("DRAGDBG drop from=$from target=$target offset=$dragOffset bounds=${bounds.toSortedMap()}")
         if (from != null && target != null && target != from && from < a.picked.size) {
             val item = a.picked.removeAt(from)
             a.picked.add(target.coerceIn(0, a.picked.size), item)
@@ -479,10 +480,10 @@ private fun PuzzleView(a: Answer) {
                             .pointerInput(a.revealed) {
                                 if (a.revealed) return@pointerInput
                                 detectDragGestures(
-                                    onDragStart = { dragFrom = currentPos; dragOffset = Offset.Zero },
+                                    onDragStart = { println("DRAGDBG start pos=$currentPos"); dragFrom = currentPos; dragOffset = Offset.Zero },
                                     onDrag = { change, amount -> change.consume(); dragOffset += amount },
-                                    onDragEnd = { drop() },
-                                    onDragCancel = { dragFrom = null; dragOffset = Offset.Zero },
+                                    onDragEnd = { println("DRAGDBG end"); drop() },
+                                    onDragCancel = { println("DRAGDBG cancel"); dragFrom = null; dragOffset = Offset.Zero },
                                 )
                             }
                             .graphicsLayer {
