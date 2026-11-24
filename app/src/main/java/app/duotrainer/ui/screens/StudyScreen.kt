@@ -674,7 +674,8 @@ private fun RatingButtons(q: Question, confidence: Confidence?, suggested: Ratin
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(r.label, style = MaterialTheme.typography.titleMedium)
-                    Text(vm.preview(q, r, confidence), style = MaterialTheme.typography.labelSmall)
+                    // 次の出題日は和文英訳だけ（練習モードの予定はどこにも使われないので出さない）
+                    if (q.mode.isTranslation) Text(vm.preview(q, r, confidence), style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
