@@ -57,6 +57,24 @@ class CoreTest {
         assertEquals(listOf("shook", "head"), blanks("shake one's head", "He shook his head."))
     }
 
+    @Test fun headwordNotations() {
+        assertEquals(listOf("a good deal of", "a great deal of"), TextUtil.alternatives("a good[great] deal of"))
+        assertEquals(listOf("get lost", "be lost"), TextUtil.alternatives("get [be] lost"))
+        assertEquals(listOf("shrink", "shrank", "shrunk"), TextUtil.alternatives("shrink-shrank-shrunk"))
+        assertEquals(listOf("be amazed to hear", "be amazed to see"), TextUtil.alternatives("be amazed to hear[see, etc]"))
+        fun blanks(head: String, s: String) =
+            TextUtil.findPhrase(head, TextUtil.tokens(s))?.map { TextUtil.tokens(s)[it].text }
+        assertEquals(listOf("a", "great", "deal", "of"), blanks("a good[great] deal of", "He wasted a great deal of time."))
+        assertEquals(listOf("five-year-old"), blanks("～-year-old", "My five-year-old son"))
+        assertEquals(listOf("1960s"), blanks("1960s", "It was popular in the 1960s."))
+        assertEquals(listOf("catch", "a", "glimpse", "of"), blanks("catch[get/have] a glimpse of", "hoping to catch a glimpse of Michael."))
+        assertEquals(listOf("threefold"), blanks("～-fold", "our surplus has swelled threefold."))
+        assertEquals(listOf("became", "aware", "of"), blanks("become aware of", "I became aware of someone"))
+        assertEquals(listOf("make", "heads", "or", "tails", "of"), blanks("cannot make heads or tails of ～", "they couldn't make heads or tails of them."))
+        assertEquals(listOf("damage", "to"), blanks("do[cause] ～ damage toA", "The drought did severe damage to the crops."))
+        assertEquals(listOf("looking", "forward", "to"), blanks("look forward to ～ing", "I'm looking forward to seeing you."))
+    }
+
     @Test fun clozeBlanksKeywords() {
         val deck = DeckParser.parse(sample)
         val s = deck.sentence(1)!!

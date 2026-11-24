@@ -3,13 +3,13 @@ package app.duotrainer.core
 /** 英文の比較・見出し語マッチングのための小さな道具箱。 */
 object TextUtil {
 
-    private val WORD = Regex("[A-Za-z][A-Za-z'’-]*")
+    private val WORD = Regex("[A-Za-z0-9][A-Za-z0-9'’-]*")
 
     private val STOP = setOf(
         "a", "an", "the", "of", "to", "in", "on", "at", "for", "with", "by", "from",
         "be", "is", "am", "are", "was", "were", "one", "one's", "oneself", "sb", "sth",
         "do", "does", "doing", "done", "and", "or", "as", "it", "that", "this", "not", "no",
-        "a's", "b", "s", "v",
+        "a's", "b", "s", "v", "can", "cannot", "can't", "could", "couldn't",
     )
 
     /** 英文中の単語トークン（位置付き）。 */
@@ -24,18 +24,68 @@ object TextUtil {
      * 見出し語から照合用のキーを作る。
      * "let go of ～/let ～go" → [[let, go], [let, go]]、"assure A (that)" → [[assure]]
      */
+    /** "～-fold" のような接尾辞の見出し語は "-fold" として扱う（threefold / five-year-old に当てる）。 */
+    private fun wordsOf(alt: String): List<String> {
+        Regex("^[～~]\\s*-([A-Za-z-]+)$").matchEntire(alt.trim())?.let { return listOf("-" + it.groupValues[1]) }
+        return WORD.findAll(alt).map { it.value }.toList()
+    }
+
     fun headwordKeys(headword: String): List<List<String>> {
-        val stripped = headword
-            .replace(Regex("\\(.*?\\)|（.*?）|\\[.*?]"), " ")
-        return stripped.split('/', '／', '、', ',')
+        return alternatives(headword)
             .map { alt ->
-                WORD.findAll(alt).map { it.value }
+                wordsOf(alt)
                     .filterNot { it == "A" || it == "B" }
                     .map { it.lowercase().replace('’', '\'') }
                     .filterNot { it in STOP }
-                    .toList()
             }
             .filter { it.isNotEmpty() }
+    }
+
+    /**
+     * 見出し語の書き方の揺れを、照合用の候補に展開する。
+     *   "a good[great] deal of"   → a good deal of / a great deal of
+     *   "get [be] lost"           → get lost / be lost
+     *   "not ～ anymore[any more]" → not ～ anymore / not ～ any more
+     *   "be amazed to hear[see, etc]" → … hear / … see
+     *   "shrink-shrank-shrunk"    → shrink / shrank / shrunk
+     *   "assure A (that)"         → assure A（丸かっこは省略可能な部分として外す）
+     */
+    fun alternatives(headword: String): List<String> {
+        val base = headword
+            .replace(Regex("\\(.*?\\)|（.*?）"), " ")
+            .replace(Regex("[～~]\\s*ing\\b"), " ～ ")      // look forward to ～ing の ing は語ではない
+            .replace(Regex("([a-z])([AB])\\b"), "$1 $2")  // toA → to A
+        val out = mutableListOf<String>()
+        fun expand(s: String, depth: Int) {
+            val m = Regex("(\\S*?)\\s*\\[([^\\]]*)]").find(s)
+            if (m == null || depth > 4) { out += s; return }
+            val before = s.substring(0, m.range.first)
+            val after = s.substring(m.range.last + 1)
+            val prefix = m.groupValues[1]
+            val options = m.groupValues[2].split(',', '、', '/', '／').map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("etc") && !it.startsWith("the-") && it != "the" }
+            expand(before + prefix + " " + after, depth + 1)
+            for (o in options) expand(before + o + " " + after, depth + 1)
+        }
+        // かっこの外の / だけで分ける（catch[get/have] a glimpse of の / は分けない）
+        val alts = mutableListOf<String>()
+        var depth = 0
+        val cur = StringBuilder()
+        for (ch in base) {
+            when {
+                ch == '[' -> { depth++; cur.append(ch) }
+                ch == ']' -> { depth--; cur.append(ch) }
+                (ch == '/' || ch == '／') && depth == 0 -> { alts += cur.toString(); cur.clear() }
+                else -> cur.append(ch)
+            }
+        }
+        alts += cur.toString()
+        for (alt in alts) {
+            val t = alt.trim()
+            if (Regex("^[A-Za-z]+(-[A-Za-z]+){2,}$").matches(t)) out += t.split('-')   // 活用の並び
+            else expand(t, 0)
+        }
+        return out.map { it.replace(Regex("\\s+"), " ").trim() }.filter { it.isNotEmpty() }.distinct()
     }
 
     /** 活用形をゆるく吸収するための前方一致用の語幹。 */
@@ -69,12 +119,16 @@ object TextUtil {
         "freeze" to "froze frozen", "wake" to "woke woken", "shine" to "shone", "shoot" to "shot",
         "sink" to "sank sunk", "sting" to "stung", "swim" to "swam swum", "be" to "is am are was were been",
         "feed" to "fed", "lead" to "led", "deal" to "dealt", "build" to "built", "bend" to "bent",
-        "stick" to "stuck", "hear" to "heard", "understand" to "understood", "arise" to "arose arisen",
+        "stick" to "stuck", "hear" to "heard", "understand" to "understood", "arise" to "arose arisen", "become" to "became",
+        "would" to "i'd you'd he'd she'd we'd they'd", "will" to "i'll you'll he'll she'll we'll they'll it'll",
     ).mapValues { it.value.split(' ').toSet() }
 
     /** トークンが見出し語の 1 語（活用形を含む）に当たるか。 */
     fun matchesKey(token: Token, key: String): Boolean =
-        token.lower.startsWith(stem(key)) || IRREGULAR[key]?.contains(token.lower) == true
+        (key.startsWith("-") && token.lower.length > key.length && token.lower.endsWith(key.drop(1))) ||
+        (!key.startsWith("-") && token.lower.startsWith(stem(key))) || IRREGULAR[key]?.contains(token.lower) == true ||
+            // "～-year-old" "～-fold" のような後ろに付く語（five-year-old, three-fold）
+            (key.contains('-') && token.lower.contains(key)) || token.lower.endsWith("-$key")
 
     /** 見出し語が英文に含まれていれば、そのトークン位置を返す（含まれなければ null）。 */
     fun findHeadword(headword: String, sentence: List<Token>): List<Int>? =
@@ -106,7 +160,7 @@ object TextUtil {
 
     private fun sameOrInflected(token: Token, word: String): Boolean {
         val w = word.lowercase().replace('’', '\'')
-        return token.lower == w || (w.length >= 4 && token.lower.startsWith(stem(w))) || IRREGULAR[w]?.contains(token.lower) == true
+        return token.lower == w || (w.length >= 4 && matchesKey(token, w)) || IRREGULAR[w]?.contains(token.lower) == true
     }
 
     /**
@@ -117,9 +171,8 @@ object TextUtil {
      *   "at any moment"    → at, any, moment
      */
     fun findPhrase(headword: String, sentence: List<Token>): List<Int>? {
-        val stripped = headword.replace(Regex("\\(.*?\\)|（.*?）|\\[.*?]"), " ")
-        for (alt in stripped.split('/', '／', '、', ',')) {
-            val words = WORD.findAll(alt).map { it.value }.toList()
+        for (alt in alternatives(headword)) {
+            val words = wordsOf(alt)
             if (words.isEmpty()) continue
             val isContent = words.map { !isPlaceholder(it) && it.lowercase().replace('’', '\'') !in STOP }
             val content = words.filterIndexed { i, _ -> isContent[i] }.map { it.lowercase().replace('’', '\'') }
