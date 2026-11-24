@@ -153,12 +153,16 @@ class ScreenshotTest {
         assertTrue(left("year.") < left("next"))
         // "next" を "year." の上までドラッグ
         val delta = center("year.") - center("next")
+        println("DRAG before next=${center("next")} year=${center("year.")} delta=$delta")
         compose.onNodeWithText("next").performTouchInput {
             down(center)
             repeat(10) { moveBy(delta / 10f, delayMillis = 16) }
-            up()
         }
         compose.waitForIdle()
+        println("DRAG during next=${center("next")} year=${center("year.")}")
+        compose.onNodeWithText("next").performTouchInput { up() }
+        compose.waitForIdle()
+        println("DRAG after next=${center("next")} year=${center("year.")}")
         assertTrue(left("next") < left("year."), "ドラッグで next が year. の前に入るはず")
         compose.onRoot().captureRoboImage("../docs/screenshots/puzzle_drag.png")
     }
