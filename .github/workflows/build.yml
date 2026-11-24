@@ -39,9 +39,22 @@ jobs:
       - name: Unit tests (core logic)
         run: ./gradlew --no-daemon testDebugUnitTest --tests 'app.duotrainer.core.*'
 
-      # 語順パズルのドラッグ（画面の操作テスト）
+      # Robolectric が使う Android の jar は大きく、Maven Central の制限にかかりやすいのでキャッシュする
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-android-all-v1
+
+      # 語順パズルのドラッグ（画面の操作テスト）。ダウンロード制限に備えて 3 回まで再試行
       - name: UI test (puzzle drag)
-        run: ./gradlew --no-daemon testDebugUnitTest --tests 'app.duotrainer.ui.ScreenshotTest.puzzleDragReorders' -i | grep -E "DRAG|FAILED|Assertion|PASSED" ; test ${PIPESTATUS[0]} -eq 0
+        run: |
+          for i in 1 2 3; do
+            ./gradlew --no-daemon testDebugUnitTest --tests 'app.duotrainer.ui.ScreenshotTest.puzzleDragReorders' -i > ui-test.log 2>&1 && ok=1 && break
+            grep -q "Failed to fetch maven artifact" ui-test.log || break
+            echo "download limited, retry $i"; sleep 60
+          done
+          grep -E "DRAG|FAILED|Assertion" ui-test.log || true
+          [ "${ok:-0}" = 1 ]
 
       # 画面のスクリーンショット（自作サンプル例文で描画）。失敗しても APK は作る。
       - name: Screenshots
