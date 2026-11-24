@@ -13,7 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Offset
@@ -447,24 +446,22 @@ private fun PuzzleView(a: Answer) {
     fun drop() {
         val from = dragFrom
         val target = targetIndex()
-        println("DRAGDBG drop from=$from target=$target offset=$dragOffset bounds=${bounds.toSortedMap()}")
         if (from != null && target != null && target != from && from < a.picked.size) {
             val item = a.picked.removeAt(from)
             a.picked.add(target.coerceIn(0, a.picked.size), item)
-            println("DRAGDBG moved picked=${a.picked.toList()} a=${System.identityHashCode(a)}")
         }
         dragFrom = null
         dragOffset = Offset.Zero
     }
 
     AppCard(Modifier.fillMaxWidth()) {
-        println("DRAGDBG compose picked=${a.picked.toList()} a=${System.identityHashCode(a)}")
         FlowRow(
             Modifier.padding(16.dp).heightIn(min = 64.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // 位置ごとの枠に、その位置の単語を表示する（並べ替えたら表示もそのまま追従する）
             a.picked.forEachIndexed { pos, idx ->
-                key(idx) {
+                run {
                     val currentPos by rememberUpdatedState(pos)
                     val dragging = dragFrom == pos
                     val color = when {
@@ -482,10 +479,10 @@ private fun PuzzleView(a: Answer) {
                             .pointerInput(a.revealed) {
                                 if (a.revealed) return@pointerInput
                                 detectDragGestures(
-                                    onDragStart = { println("DRAGDBG start pos=$currentPos"); dragFrom = currentPos; dragOffset = Offset.Zero },
+                                    onDragStart = { dragFrom = currentPos; dragOffset = Offset.Zero },
                                     onDrag = { change, amount -> change.consume(); dragOffset += amount },
-                                    onDragEnd = { println("DRAGDBG end"); drop() },
-                                    onDragCancel = { println("DRAGDBG cancel"); dragFrom = null; dragOffset = Offset.Zero },
+                                    onDragEnd = { drop() },
+                                    onDragCancel = { dragFrom = null; dragOffset = Offset.Zero },
                                 )
                             }
                             .graphicsLayer {
@@ -494,7 +491,7 @@ private fun PuzzleView(a: Answer) {
                                     scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 12f
                                 }
                             },
-                    ) { println("DRAGDBG click pos=$currentPos"); if (!a.revealed) a.picked.removeAt(currentPos) }
+                    ) { if (!a.revealed) a.picked.removeAt(currentPos) }
                 }
             }
         }
