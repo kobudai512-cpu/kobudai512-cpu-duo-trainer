@@ -451,12 +451,14 @@ private fun PuzzleView(a: Answer) {
         if (from != null && target != null && target != from && from < a.picked.size) {
             val item = a.picked.removeAt(from)
             a.picked.add(target.coerceIn(0, a.picked.size), item)
+            println("DRAGDBG moved picked=${a.picked.toList()} a=${System.identityHashCode(a)}")
         }
         dragFrom = null
         dragOffset = Offset.Zero
     }
 
     AppCard(Modifier.fillMaxWidth()) {
+        println("DRAGDBG compose picked=${a.picked.toList()} a=${System.identityHashCode(a)}")
         FlowRow(
             Modifier.padding(16.dp).heightIn(min = 64.dp).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -492,7 +494,7 @@ private fun PuzzleView(a: Answer) {
                                     scaleX = 1.08f; scaleY = 1.08f; shadowElevation = 12f
                                 }
                             },
-                    ) { if (!a.revealed) a.picked.removeAt(currentPos) }
+                    ) { println("DRAGDBG click pos=$currentPos"); if (!a.revealed) a.picked.removeAt(currentPos) }
                 }
             }
         }
