@@ -21,11 +21,12 @@ sealed interface Scope {
     data class Section(val section: Int) : Scope
 }
 
-enum class Category(val label: String) { NEW("未学習"), WEAK("苦手"), GOOD("正解"), MASTERED("簡単") }
+enum class Category(val label: String) { NEW("未学習"), WEAK("苦手"), HARD("難しい"), GOOD("正解"), MASTERED("簡単") }
 
 fun Progress?.category(): Category = when (this?.last) {
     null -> Category.NEW
     Rating.WEAK -> Category.WEAK
+    Rating.HARD -> Category.HARD
     Rating.GOOD -> Category.GOOD
     Rating.MASTERED -> Category.MASTERED
 }

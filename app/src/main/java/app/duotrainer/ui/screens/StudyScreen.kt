@@ -267,8 +267,11 @@ private fun suggestedRating(q: Question, a: Answer): Rating {
         StudyMode.CLOZE -> a.cloze?.blanks?.all { TextUtil.sameWord(it.answer, a.blanks[it.index]) } == true
         StudyMode.PUZZLE -> a.picked.map { a.pieces[it] } == a.pieces
         StudyMode.SHADOWING -> a.text.isBlank() || TextUtil.diff(q.sentence!!.en, a.text, a.spoken).score >= 0.85f
-        else -> TextUtil.diff(q.sentence!!.en, a.text, a.spoken).score >= 0.9f
+        else -> TextUtil.diff(q.sentence!!.en, a.text, a.spoken).isPerfect
     }
+    // 和文英訳（入力あり）で、間違いが機能語やつづりだけなら「難しい」
+    if (!ok && q.mode == StudyMode.FREE && a.text.isNotBlank() &&
+        TextUtil.onlyMinorErrors(TextUtil.diff(q.sentence!!.en, a.text, a.spoken))) return Rating.HARD
     return if (!ok) Rating.WEAK
     else if (a.confidence == Confidence.HIGH && q.mode.isTranslation) Rating.MASTERED else Rating.GOOD
 }
@@ -653,17 +656,18 @@ private fun Feedback(q: Question, a: Answer, deck: Deck, vm: AppViewModel) {
 @Composable
 private fun RatingButtons(q: Question, confidence: Confidence?, suggested: Rating, vm: AppViewModel, onRate: (Rating) -> Unit) {
     val status = StatusPalette.current
-    // 「簡単」は和文英訳だけ。練習モードは 苦手 / 正解 の 2 つ。
+    // 「難しい」「簡単」は和文英訳だけ。練習モードは 苦手 / 正解 の 2 つ。
     val ratings = if (q.mode.isTranslation) Rating.entries else listOf(Rating.WEAK, Rating.GOOD)
+    val compact = ratings.size >= 4
     Column {
     if (!q.mode.isTranslation) Text(
         "練習モードの結果は例文の仕分けに入りません（仕分けは和文英訳だけ）",
         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp)) {
         ratings.forEach { r ->
-            val color = when (r) { Rating.WEAK -> status.weak; Rating.GOOD -> status.good; Rating.MASTERED -> status.mastered }
+            val color = when (r) { Rating.WEAK -> status.weak; Rating.HARD -> status.hard; Rating.GOOD -> status.good; Rating.MASTERED -> status.mastered }
             val isSuggested = r == suggested
             Button(
                 onClick = { onRate(r) },
@@ -671,9 +675,10 @@ private fun RatingButtons(q: Question, confidence: Confidence?, suggested: Ratin
                 colors = if (isSuggested) ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White)
                 else ButtonDefaults.buttonColors(containerColor = color.copy(alpha = 0.14f), contentColor = color),
                 shape = MaterialTheme.shapes.medium,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (compact) 4.dp else 12.dp),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(r.label, style = MaterialTheme.typography.titleMedium)
+                    Text(r.label, style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium, maxLines = 1)
                     // 次の出題日は和文英訳だけ（練習モードの予定はどこにも使われないので出さない）
                     if (q.mode.isTranslation) Text(vm.preview(q, r, confidence), style = MaterialTheme.typography.labelSmall)
                 }

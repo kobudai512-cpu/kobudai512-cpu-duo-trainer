@@ -136,6 +136,25 @@ class CoreTest {
         assertTrue(low.due < mid.due && mid.due < mastered.due)
     }
 
+    @Test fun srsHardGrowsSlowly() {
+        val p8 = Progress(interval = 8, due = 0, last = Rating.GOOD, reps = 3)
+        val hard = Srs.review(p8, Rating.HARD, Confidence.MID, 0)
+        val good = Srs.review(p8, Rating.GOOD, Confidence.MID, 0)
+        val weak = Srs.review(p8, Rating.WEAK, Confidence.MID, 0)
+        assertEquals(10, hard.due)              // 8 × 1.2 ≈ 10 日
+        assertTrue(weak.due < hard.due && hard.due < good.due)
+        assertTrue(hard.ease < p8.ease)
+        assertEquals(1, Srs.review(null, Rating.HARD, Confidence.MID, 0).due)
+        assertEquals(4, Srs.review(Progress(interval = 3), Rating.HARD, Confidence.MID, 0).due)
+    }
+
+    @Test fun minorErrorsSuggestHard() {
+        val e = "He crept out of the room and set off."
+        assertTrue(TextUtil.onlyMinorErrors(TextUtil.diff(e, "He crept out the room and set off")))    // of 抜け
+        assertTrue(TextUtil.onlyMinorErrors(TextUtil.diff(e, "He crep out of the room and set off")))  // つづり
+        assertTrue(!TextUtil.onlyMinorErrors(TextUtil.diff(e, "He walked out of the room and set off"))) // 内容語
+    }
+
     @Test fun srsReadsOldRecords() {
         val old = Progress(stage = 2, due = 10, last = Rating.GOOD, reps = 2)
         assertTrue(Srs.review(old, Rating.GOOD, Confidence.MID, 10).due - 10 >= 14)

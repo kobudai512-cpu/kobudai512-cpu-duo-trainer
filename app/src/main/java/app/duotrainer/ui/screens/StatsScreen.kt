@@ -157,7 +157,8 @@ fun StatsScreen(state: UiState, vm: AppViewModel) {
                         val ss = deck.sentencesIn(sec)
                         val m = ss.count { state.user.progress[Keys.sentence(it.id)].category() == Category.MASTERED }
                         val g = ss.count { state.user.progress[Keys.sentence(it.id)].category() == Category.GOOD }
-                        val ratio = (m + g * 0.5f) / ss.size.coerceAtLeast(1)
+                        val h = ss.count { state.user.progress[Keys.sentence(it.id)].category() == Category.HARD }
+                        val ratio = (m + g * 0.5f + h * 0.25f) / ss.size.coerceAtLeast(1)
                         Box(
                             Modifier.size(34.dp).clip(RoundedCornerShape(8.dp))
                                 .background(

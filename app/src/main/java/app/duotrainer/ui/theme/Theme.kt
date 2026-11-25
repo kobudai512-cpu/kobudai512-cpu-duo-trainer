@@ -81,16 +81,16 @@ private val Dark = darkColorScheme(
     onErrorContainer = Color(0xFFFFE1E1),
 )
 
-/** 学習状態の色（苦手・得意・覚えた・未学習）。 */
+/** 学習状態の色（苦手・難しい・正解・簡単・未学習）。 */
 @Immutable
-data class StatusColors(val weak: Color, val good: Color, val mastered: Color, val fresh: Color, val streak: Color)
+data class StatusColors(val weak: Color, val hard: Color, val good: Color, val mastered: Color, val fresh: Color, val streak: Color)
 
 private val LightStatus = StatusColors(
-    weak = Color(0xFFE5484D), good = Color(0xFF3B82F6), mastered = Color(0xFF22A06B),
+    weak = Color(0xFFE5484D), hard = Color(0xFFE8890C), good = Color(0xFF3B82F6), mastered = Color(0xFF22A06B),
     fresh = Color(0xFFCBD0DC), streak = Orange,
 )
 private val DarkStatus = StatusColors(
-    weak = Color(0xFFFF7A7D), good = Color(0xFF7AA9FF), mastered = Color(0xFF4CD39A),
+    weak = Color(0xFFFF7A7D), hard = Color(0xFFFFB347), good = Color(0xFF7AA9FF), mastered = Color(0xFF4CD39A),
     fresh = Color(0xFF454956), streak = Color(0xFFFFB95C),
 )
 

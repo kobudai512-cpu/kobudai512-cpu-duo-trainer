@@ -10,7 +10,8 @@ import kotlin.math.roundToInt
  * と、思い出せるたびに間隔を「覚えやすさ（ease）」倍ずつ伸ばす。
  *
  * - 苦手   … 翌日に戻す（その回の中でもう一度出題）。ease を下げ、次からは伸び方がゆるやかに
- * - 得意   … 前回の間隔 × ease
+ * - 難しい … 前回の間隔 × 1.2（最低でも 1 日は伸ばす）。ease を少し下げる（機能語・細かいミス用）
+ * - 正解   … 前回の間隔 × ease
  * - 覚えた … 前回の間隔 × ease × 1.3、ease を上げる（和文英訳のときだけ選べる）
  * - 自信度 … 自信なしで正解 → 短め＆ease 少し下げる、自信あり → 少し長め
  */
@@ -34,6 +35,10 @@ object Srs {
         var ease = p.ease
         if (rating == Rating.WEAK) {
             return Plan(1, (ease - 0.2f).coerceAtLeast(MIN_EASE))
+        }
+        if (rating == Rating.HARD) {
+            val days = if (prev <= 0) 1 else maxOf(prev + 1, (prev * 1.2).roundToInt())
+            return Plan(days.coerceAtMost(MAX_INTERVAL), (ease - 0.15f).coerceAtLeast(MIN_EASE))
         }
         val conf = when (confidence) {
             Confidence.LOW -> { ease -= 0.1f; 0.7 }
@@ -59,7 +64,7 @@ object Srs {
         val p = current ?: Progress()
         val plan = plan(p, rating, confidence)
         return p.copy(
-            stage = if (rating == Rating.WEAK) 0 else p.stage + 1,
+            stage = when (rating) { Rating.WEAK -> 0; Rating.HARD -> p.stage; else -> p.stage + 1 },
             due = today + plan.interval,
             interval = plan.interval,
             ease = plan.ease,

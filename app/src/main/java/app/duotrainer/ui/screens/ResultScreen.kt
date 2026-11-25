@@ -61,7 +61,7 @@ fun ResultScreen(state: UiState, vm: AppViewModel, onDone: () -> Unit) {
         AppCard(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Rating.entries.forEach { r ->
-                    val c = when (r) { Rating.WEAK -> status.weak; Rating.GOOD -> status.good; Rating.MASTERED -> status.mastered }
+                    val c = when (r) { Rating.WEAK -> status.weak; Rating.HARD -> status.hard; Rating.GOOD -> status.good; Rating.MASTERED -> status.mastered }
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Dot(c); Spacer(Modifier.width(6.dp))

@@ -65,6 +65,7 @@ fun Category.color(): Color {
     return when (this) {
         Category.NEW -> c.fresh
         Category.WEAK -> c.weak
+        Category.HARD -> c.hard
         Category.GOOD -> c.good
         Category.MASTERED -> c.mastered
     }
@@ -125,7 +126,7 @@ fun ProgressRing(
 @Composable
 fun CategoryBar(counts: Map<Category, Int>, modifier: Modifier = Modifier, height: Dp = 10.dp) {
     val total = counts.values.sum().coerceAtLeast(1)
-    val order = listOf(Category.MASTERED, Category.GOOD, Category.WEAK, Category.NEW)
+    val order = listOf(Category.MASTERED, Category.GOOD, Category.HARD, Category.WEAK, Category.NEW)
     val colors = order.map { it.color() }
     Canvas(modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(50))) {
         var x = 0f
@@ -139,8 +140,13 @@ fun CategoryBar(counts: Map<Category, Int>, modifier: Modifier = Modifier, heigh
 
 @Composable
 fun CategoryLegend(counts: Map<Category, Int>, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        listOf(Category.MASTERED, Category.GOOD, Category.WEAK, Category.NEW).forEach { c ->
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    androidx.compose.foundation.layout.FlowRow(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf(Category.MASTERED, Category.GOOD, Category.HARD, Category.WEAK, Category.NEW).forEach { c ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(c.color()))
                 Spacer(Modifier.width(6.dp))

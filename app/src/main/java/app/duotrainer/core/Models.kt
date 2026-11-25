@@ -55,6 +55,8 @@ data class Deck(
 @Serializable
 enum class Rating(val label: String) {
     WEAK("苦手"),
+    /** 言えたが、機能語や細かい所を間違えた／かなり詰まった */
+    HARD("難しい"),
     GOOD("正解"),
     MASTERED("簡単"),
 }

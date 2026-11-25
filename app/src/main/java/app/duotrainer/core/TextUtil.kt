@@ -339,6 +339,21 @@ object TextUtil {
         return DiffResult(parts, score.coerceIn(0f, 1f))
     }
 
+    /** 冠詞・前置詞・助動詞など、意味の中心ではない語。 */
+    val FUNCTION_WORDS = setOf(
+        "a", "an", "the", "of", "to", "in", "on", "at", "for", "with", "by", "from", "about", "into", "onto",
+        "as", "and", "or", "but", "so", "than", "that", "this", "these", "those", "it", "its", "there",
+        "is", "am", "are", "was", "were", "be", "been", "being", "do", "does", "did", "have", "has", "had",
+        "will", "would", "can", "could", "shall", "should", "may", "might", "must", "not", "up", "out", "off",
+        "some", "any", "my", "your", "his", "her", "our", "their",
+    )
+
+    /** 間違いが「つづり違い」か「小さな語」だけなら true（＝「難しい」向き）。 */
+    fun onlyMinorErrors(d: DiffResult): Boolean {
+        val errors = d.parts.filter { it.kind != DiffKind.MATCH }
+        return errors.isNotEmpty() && errors.all { it.kind == DiffKind.TYPO || it.text in FUNCTION_WORDS }
+    }
+
     /** 1 語の答え合わせ（穴埋め用）。 */
     fun sameWord(expected: String, answer: String): Boolean =
         normalizeWords(expected) == normalizeWords(answer)
