@@ -19,6 +19,8 @@ sealed interface Scope {
     data object Today : Scope
     data object Weak : Scope
     data class Section(val section: Int) : Scope
+    /** 決まった例文の集まり（★ブックマークなど） */
+    data class Custom(val title: String, val ids: List<Int>) : Scope
 }
 
 enum class Category(val label: String) { NEW("未学習"), WEAK("苦手"), HARD("難しい"), GOOD("正解"), MASTERED("簡単") }
@@ -73,6 +75,7 @@ class Planner(
                 val rest = inSec - due.toSet() - news.toSet()
                 (news + due + rest).take(size)
             }
+            is Scope.Custom -> scope.ids.mapNotNull(deck::sentence).shuffled(random).take(size)
         }
         return list.map { s -> Question(Keys.forSentence(mode, s.id), mode, sentence = s) }
     }
@@ -81,6 +84,7 @@ class Planner(
         val words = when (scope) {
             is Scope.Section -> deck.wordsIn(scope.section)
             Scope.Weak -> deck.words.filter { progress[Keys.word(it.id)]?.last == Rating.WEAK }.shuffled(random)
+            is Scope.Custom -> deck.words.filter { it.sentenceId in scope.ids }.shuffled(random)
             Scope.Today -> {
                 val studiedSections = deck.sentences.filter { Keys.sentence(it.id) in progress }.map { it.section }.toSet()
                     .ifEmpty { setOf(deck.sections.first()) }
@@ -136,6 +140,20 @@ class Planner(
 
 /** 学習記録の集計。 */
 object Stats {
+    /**
+     * これからの復習の予報：今日から [days] 日分、和文英訳の復習が何文ずつ出るか。
+     * 今日の分には、期限を過ぎてたまっている文も含める。
+     */
+    fun forecast(progress: Map<String, Progress>, today: Long, days: Int = 7): List<Int> {
+        val out = IntArray(days)
+        for ((k, p) in progress) {
+            if (!k.startsWith("s:")) continue
+            val d = (p.due - today).coerceAtLeast(0)
+            if (d < days) out[d.toInt()]++
+        }
+        return out.toList()
+    }
+
     /** 今日（または昨日）までの連続学習日数。 */
     fun streak(days: Map<Long, DayLog>, today: Long): Int {
         var d = if ((days[today]?.answered ?: 0) > 0) today else today - 1

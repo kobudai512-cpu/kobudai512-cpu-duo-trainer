@@ -119,6 +119,23 @@ fun StatsScreen(state: UiState, vm: AppViewModel) {
             }
         }
 
+        SectionTitle("これからの復習（和文英訳）")
+        val fc = Stats.forecast(state.user.progress, today)
+        AppCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("今日 ${fc[0]} 文 ・ 明日 ${fc[1]} 文 ・ 7 日間で ${fc.sum()} 文", style = MaterialTheme.typography.titleSmall)
+                Text("新しい例文を増やしすぎると、数日後の復習が山になります。山が高いときは「1日の新しい例文」を減らしましょう。",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                BarChart(
+                    values = fc.map { it.toFloat() },
+                    labels = fc.indices.map { i -> when (i) { 0 -> "今日"; 1 -> "明日"; else -> weekday(today + i) } },
+                    color = status.good,
+                    highlightLast = false,
+                )
+            }
+        }
+
         SectionTitle("学習時間（分）")
         AppCard(Modifier.fillMaxWidth()) {
             BarChart(

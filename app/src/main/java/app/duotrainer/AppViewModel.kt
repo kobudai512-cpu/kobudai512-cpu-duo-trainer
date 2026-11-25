@@ -102,7 +102,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { store.importDeck(uri) }
             .onSuccess { deck ->
                 // 例文の並びが変わっても（誤字修正・順番の修正）、学習記録は英文で照らし合わせて引き継ぐ
-                if (old != null) updateUser { u -> u.copy(progress = remapProgress(u.progress, old, deck)) }
+                if (old != null) updateUser { u ->
+                    val map = sentenceIdMapper(old, deck)
+                    u.copy(progress = remapProgress(u.progress, old, deck), bookmarks = u.bookmarks.mapNotNull(map).distinct())
+                }
                 _state.update {
                     it.copy(deck = deck, busy = null,
                         message = "${deck.sentences.size} 文・${deck.words.size} 語を読み込みました")
@@ -111,16 +114,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { e -> _state.update { it.copy(busy = null, message = e.message ?: "読み込みに失敗しました") } }
     }
 
-    private fun remapProgress(progress: Map<String, Progress>, old: Deck, new: Deck): Map<String, Progress> {
+    /** 古い教材の例文番号 → 新しい教材の例文番号（英文で照らし合わせる）。 */
+    private fun sentenceIdMapper(old: Deck, new: Deck): (Int) -> Int? {
         fun norm(s: String) = TextUtil.normalizeWords(s).joinToString(" ")
         val newSentence = new.sentences.groupBy { norm(it.en) }
-        val newWord = new.words.groupBy { it.section to norm(it.en) }
-        fun sentenceId(id: Int): Int? {
-            val s = old.sentence(id) ?: return id
-            val cands = newSentence[norm(s.en)]
+        return { id ->
+            val s = old.sentence(id)
+            if (s == null) id
             // 英文が直された文は、同じ番号のまま引き継ぐ
-            return cands?.minByOrNull { kotlin.math.abs(it.id - id) }?.id ?: new.sentence(id)?.id
+            else newSentence[norm(s.en)]?.minByOrNull { kotlin.math.abs(it.id - id) }?.id ?: new.sentence(id)?.id
         }
+    }
+
+    private fun remapProgress(progress: Map<String, Progress>, old: Deck, new: Deck): Map<String, Progress> {
+        fun norm(s: String) = TextUtil.normalizeWords(s).joinToString(" ")
+        val newWord = new.words.groupBy { it.section to norm(it.en) }
+        val sentenceId = sentenceIdMapper(old, new)
         fun wordId(id: Int): Int? {
             val w = old.word(id) ?: return id
             return newWord[w.section to norm(w.en)]?.minByOrNull { kotlin.math.abs(it.id - id) }?.id ?: new.word(id)?.id
@@ -193,6 +202,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 Scope.Weak -> "苦手な問題はまだありません"
                 Scope.Today -> "今日の分は終わりました！"
                 is Scope.Section -> "出題できる問題がありません"
+                is Scope.Custom -> "例文がありません"
             })
             return
         }
@@ -200,6 +210,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             Scope.Today -> "今日の学習"
             Scope.Weak -> "苦手を練習"
             is Scope.Section -> "Section ${scope.section}"
+            is Scope.Custom -> scope.title
         }
         if (scope is Scope.Section) updateUser { it.copy(lastSection = scope.section) }
         if (mode.isTranslation) updateUser { it.copy(translationMode = mode) }
@@ -267,6 +278,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun preview(q: Question, rating: Rating, confidence: Confidence?): String =
         if (q.relearn) "確認用（予定は明日）" else Srs.preview(_state.value.user.progress[q.key], rating, confidence)
+
+    // ---------- ブックマーク ----------
+
+    fun isBookmarked(id: Int): Boolean = id in _state.value.user.bookmarks
+
+    fun toggleBookmark(id: Int) = updateUser { u ->
+        u.copy(bookmarks = if (id in u.bookmarks) u.bookmarks - id else u.bookmarks + id)
+    }
+
+    // ---------- 聞き流し ----------
+
+    /** 例文の並びを、CD 音声の区間つきの聞き流しリストにして再生を始める。 */
+    fun startListening(title: String, sentences: List<Sentence>, onReady: () -> Unit = {}) = viewModelScope.launch {
+        if (sentences.isEmpty()) { toast("聞き流す例文がありません"); return@launch }
+        val user = _state.value.user
+        val useCd = user.settings.audioSource == AudioSource.CD
+        _state.update { it.copy(busy = "音声を準備しています…") }
+        val items = sentences.map { s ->
+            val track = user.tracks[s.section.toString()]
+            val seg = if (useCd && track != null) runCatching { segmentFor(s) }.getOrNull() else null
+            app.duotrainer.listen.ListenItem(
+                sentenceId = s.id, section = s.section, en = s.en, ja = s.ja,
+                trackUri = if (seg != null) track else null, segment = seg,
+            )
+        }
+        _state.update { it.copy(busy = null) }
+        player.stop()
+        app.duotrainer.listen.ListenController.start(getApplication(), title, items, user.settings.speed)
+        onReady()
+    }
 
     // ---------- 音声 ----------
 

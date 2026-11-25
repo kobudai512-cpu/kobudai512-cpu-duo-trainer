@@ -2,6 +2,10 @@
 
 package app.duotrainer.ui.screens
 
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -75,6 +79,15 @@ fun SectionsScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        item {
+            AppCard(Modifier.fillMaxWidth(), onClick = { open(Route.Search) }) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(10.dp))
+                    Text("例文・単語を検索", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
         item {
             // 本の表紙のようなヘッダー
             Row(
@@ -158,6 +171,11 @@ fun SectionDetailScreen(section: Int, state: UiState, vm: AppViewModel, open: (R
                         Text("このセクションで学習", style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AssistChip(
+                                onClick = { vm.startListening("Section $section", sentences) { open(Route.Listen) } },
+                                label = { Text("聞き流し") },
+                                leadingIcon = { Icon(Icons.Rounded.Headphones, null, Modifier.size(AssistChipDefaults.IconSize)) },
+                            )
                             StudyMode.entries.forEach { m ->
                                 AssistChip(
                                     onClick = { vm.startSession(Scope.Section(section), m) },
@@ -192,6 +210,11 @@ fun SectionDetailScreen(section: Int, state: UiState, vm: AppViewModel, open: (R
                                 Spacer(Modifier.height(4.dp))
                                 Text(s.ja, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                        }
+                        val starred = s.id in state.user.bookmarks
+                        IconButton(onClick = { vm.toggleBookmark(s.id) }) {
+                            Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, "ブックマーク",
+                                tint = if (starred) app.duotrainer.ui.theme.StatusPalette.current.streak else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         IconButton(onClick = { vm.playSentence(s) }) { Icon(Icons.AutoMirrored.Rounded.VolumeUp, "再生") }
                     }

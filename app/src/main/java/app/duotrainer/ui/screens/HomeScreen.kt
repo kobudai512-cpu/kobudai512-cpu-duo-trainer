@@ -1,5 +1,15 @@
 package app.duotrainer.ui.screens
 
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import app.duotrainer.listen.ListenController
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -83,6 +93,7 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(greeting(), style = MaterialTheme.typography.headlineSmall)
             }
+            IconButton(onClick = { open(Route.Search) }) { Icon(Icons.Rounded.Search, "検索") }
             StreakChip(streak)
         }
 
@@ -110,6 +121,27 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
             }
         }
 
+        // 聞き流し中なら、すぐ戻れるように
+        val listen by ListenController.state.collectAsState()
+        if (listen.active) {
+            AppCard(Modifier.fillMaxWidth(), onClick = { open(Route.Listen) }, color = MaterialTheme.colorScheme.primaryContainer) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Headphones, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(if (listen.playing) "聞き流し中：${listen.title}" else "聞き流し（一時停止中）：${listen.title}",
+                            style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(listen.current?.en.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    IconButton(onClick = { ListenController.toggle() }) {
+                        Icon(if (listen.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                }
+            }
+        }
+
         // 苦手な例文をランダムに
         AppCard(Modifier.fillMaxWidth(), onClick = { vm.startSession(Scope.Weak, user.translationMode) }) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -124,6 +156,39 @@ fun HomeScreen(state: UiState, vm: AppViewModel, open: (Route) -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null)
+            }
+        }
+
+        // 聞き流しと★ブックマーク
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppCard(Modifier.weight(1f)) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Headphones, null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("聞き流し", style = MaterialTheme.typography.titleSmall)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(onClick = {
+                        vm.startListening("Section ${user.lastSection}", deck.sentencesIn(user.lastSection)) { open(Route.Listen) }
+                    }) { Text("Section ${user.lastSection}") }
+                    TextButton(onClick = {
+                        vm.startListening("苦手な例文", planner.weakSentences().shuffled()) { open(Route.Listen) }
+                    }) { Text("苦手な例文 $weakCount") }
+                }
+            }
+            AppCard(Modifier.weight(1f), onClick = { open(Route.Bookmarks) }) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Star, null, tint = StatusPalette.current.streak)
+                        Spacer(Modifier.width(8.dp))
+                        Text("ブックマーク", style = MaterialTheme.typography.titleSmall)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("${user.bookmarks.size}", style = MaterialTheme.typography.headlineMedium)
+                    Text("文。★だけで学習・聞き流し", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
 

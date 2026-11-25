@@ -57,6 +57,8 @@ data class UserData(
     val tracks: Map<String, String> = emptyMap(),
     val sectionAudio: Map<String, SectionAudio> = emptyMap(),
     val lastSection: Int = 1,
+    /** ★ブックマークした例文の番号 */
+    val bookmarks: List<Int> = emptyList(),
     /** 最後に使った和文英訳のやり方（入力 / 判定）。 */
     val translationMode: app.duotrainer.core.StudyMode = app.duotrainer.core.StudyMode.SELF,
 ) {

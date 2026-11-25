@@ -2,6 +2,8 @@
 
 package app.duotrainer.ui.screens
 
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.speech.RecognizerIntent
@@ -187,6 +189,14 @@ fun StudyScreen(state: UiState, vm: AppViewModel) {
                 Pill(q.mode.label, q.mode.icon)
                 Pill("Section ${q.section}" + (q.sentence?.let { " · No.${it.id}" } ?: ""))
                 if (q.relearn) Pill("もう一度")
+                Spacer(Modifier.weight(1f))
+                q.sentence?.let { s ->
+                    val starred = s.id in state.user.bookmarks
+                    IconButton(onClick = { vm.toggleBookmark(s.id) }) {
+                        Icon(if (starred) Icons.Rounded.Star else Icons.Rounded.StarBorder, "ブックマーク",
+                            tint = if (starred) StatusPalette.current.streak else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
 
             if (session.mixedSections && settings.interleaveHint && !hintClosed) {

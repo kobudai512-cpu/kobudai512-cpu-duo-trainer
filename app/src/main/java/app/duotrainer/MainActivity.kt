@@ -1,5 +1,8 @@
 package app.duotrainer
 
+import app.duotrainer.ui.screens.SearchScreen
+import app.duotrainer.ui.screens.BookmarksScreen
+import app.duotrainer.ui.screens.ListenScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -57,6 +60,9 @@ sealed interface Route {
     data object Settings : Route
     data class Section(val section: Int) : Route
     data class AudioTune(val section: Int) : Route
+    data object Search : Route
+    data object Bookmarks : Route
+    data object Listen : Route
 }
 
 private enum class Tab(val route: Route, val label: String, val icon: ImageVector) {
@@ -153,6 +159,9 @@ fun App(vm: AppViewModel) {
                     Route.Settings -> SettingsScreen(state, vm)
                     is Route.Section -> SectionDetailScreen(r.section, state, vm, open = ::go, back = ::back)
                     is Route.AudioTune -> AudioTuneScreen(r.section, state, vm, back = ::back)
+                    Route.Search -> SearchScreen(state, vm, open = ::go, back = ::back)
+                    Route.Bookmarks -> BookmarksScreen(state, vm, open = ::go, back = ::back)
+                    Route.Listen -> ListenScreen(state, vm, back = ::back)
                 }
             }
         }

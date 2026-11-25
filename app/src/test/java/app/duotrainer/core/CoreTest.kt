@@ -178,6 +178,23 @@ class CoreTest {
         assertTrue(cloze.all { it.key.startsWith("p:CLOZE:") })
     }
 
+    @Test fun forecastCountsDueDays() {
+        val p = mapOf(
+            "s:1" to Progress(due = 8), "s:2" to Progress(due = 10), "s:3" to Progress(due = 11),
+            "s:4" to Progress(due = 30), "p:CLOZE:1" to Progress(due = 10), "w:1" to Progress(due = 10),
+        )
+        // 今日=10。期限切れ(8)は今日に含める。練習・単語の記録は数えない
+        assertEquals(listOf(2, 1, 0, 0, 0, 0, 0), Stats.forecast(p, 10))
+    }
+
+    @Test fun customScopeUsesGivenSentences() {
+        val deck = DeckParser.parse(sample)
+        val qs = Planner(deck, emptyMap(), 0).build(Scope.Custom("★", listOf(3, 1)), StudyMode.SELF, 10, 10)
+        assertEquals(setOf("s:1", "s:3"), qs.map { it.key }.toSet())
+        val words = Planner(deck, emptyMap(), 0).build(Scope.Custom("★", listOf(3)), StudyMode.WORD, 10, 10)
+        assertEquals(setOf("w:4", "w:5"), words.map { it.key }.toSet())
+    }
+
     @Test fun streakCounts() {
         val d = mapOf(8L to DayLog(answered = 3), 9L to DayLog(answered = 1), 10L to DayLog(answered = 2))
         assertEquals(3, Stats.streak(d, 10))
