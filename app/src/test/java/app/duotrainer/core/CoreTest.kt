@@ -166,6 +166,19 @@ class CoreTest {
         assertEquals(3, weak.due)                        // 苦手なら早くても明日に戻す
     }
 
+    @Test fun sameDaySecondTryKeepsWeak() {
+        val weak = Srs.review(null, Rating.WEAK, Confidence.MID, 5)          // 5 日目に苦手
+        val again = Srs.review(weak, Rating.GOOD, Confidence.MID, 5)         // 同じ日にもう一度正解
+        assertEquals(Rating.WEAK, again.last)                                // 色は苦手のまま
+        assertEquals(6, again.due)                                           // 予定も明日のまま
+        assertEquals(Rating.GOOD, Srs.review(weak, Rating.GOOD, Confidence.MID, 6).last)  // 翌日なら正解になる
+        // 今日苦手にした文は、同じ日のセクション学習には出さない
+        val deck = DeckParser.parse(sample)
+        val p = mapOf(Keys.sentence(1) to weak, Keys.sentence(2) to Progress(due = 9, last = Rating.GOOD, lastDay = 4))
+        assertTrue(Planner(deck, p, 5).sectionPending(1).isEmpty())
+        assertEquals(listOf(1), Planner(deck, p, 6).sectionPending(1).map { it.id })
+    }
+
     @Test fun sectionShowsOnlyPending() {
         val deck = DeckParser.parse(sample)   // Section 1 = 例文 1, 2
         val progress = mapOf(

@@ -53,7 +53,8 @@ class Planner(
     fun sectionPending(section: Int): List<Sentence> {
         val inSec = deck.sentencesIn(section)
         val news = inSec.filter { Keys.sentence(it.id) !in progress }
-        val weak = inSec.filter { progress[Keys.sentence(it.id)]?.last == Rating.WEAK }
+        // 今日すでに苦手にした文は、明日の復習にまかせる（その回の「もう一度」で確認済み）
+        val weak = inSec.filter { progress[Keys.sentence(it.id)]?.let { p -> p.last == Rating.WEAK && p.lastDay != today } ?: false }
         val due = inSec.filter { progress[Keys.sentence(it.id)]?.let { p -> p.due <= today } ?: false }
         return (news + weak + due).distinctBy { it.id }
     }

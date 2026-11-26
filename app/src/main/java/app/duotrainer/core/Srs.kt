@@ -80,6 +80,9 @@ object Srs {
 
     fun review(current: Progress?, rating: Rating, confidence: Confidence?, today: Long): Progress {
         val p = current ?: Progress()
+        // 同じ日の 2 回目（苦手の直後にセクションからもう一度、など）は確認だけ。
+        // 苦手以外を押しても、仕分け（色）も予定も変えない。苦手を押したときだけ苦手にする。
+        if (current != null && p.lastDay == today && rating != Rating.WEAK) return p
         val plan = plan(current, rating, confidence, today)
         return p.copy(
             stage = when (rating) { Rating.WEAK -> 0; Rating.HARD -> p.stage; else -> p.stage + 1 },

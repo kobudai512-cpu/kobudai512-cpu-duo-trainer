@@ -281,7 +281,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun preview(q: Question, rating: Rating, confidence: Confidence?): String =
-        if (q.relearn) "確認用（予定は明日）" else Srs.preview(_state.value.user.progress[q.key], rating, confidence, today)
+        if (q.relearn) "確認用（予定は明日）"
+        else if (_state.value.user.progress[q.key]?.lastDay == today && rating != Rating.WEAK) "今日はやり済み（予定そのまま）"
+        else Srs.preview(_state.value.user.progress[q.key], rating, confidence, today)
 
     // ---------- ブックマーク ----------
 
