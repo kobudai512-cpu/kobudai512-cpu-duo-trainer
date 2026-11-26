@@ -155,6 +155,28 @@ class CoreTest {
         assertTrue(!TextUtil.onlyMinorErrors(TextUtil.diff(e, "He walked out of the room and set off"))) // 内容語
     }
 
+    @Test fun earlyReviewDoesNotInflateInterval() {
+        // day 0 に正解して次は day 8 の文を、day 2 にもう一度正解した
+        val p = Progress(interval = 8, due = 8, last = Rating.GOOD, reps = 3, lastDay = 0)
+        val early = Srs.review(p, Rating.GOOD, Confidence.MID, 2)
+        assertEquals(8, early.due)                       // 予定日より前には戻さないし、20 日に飛ばしもしない
+        val sameDay = Srs.review(p.copy(lastDay = 2, due = 10), Rating.GOOD, Confidence.MID, 2)
+        assertEquals(10, sameDay.due)                    // その日のうちのやり直しは予定そのまま
+        val weak = Srs.review(p, Rating.WEAK, Confidence.MID, 2)
+        assertEquals(3, weak.due)                        // 苦手なら早くても明日に戻す
+    }
+
+    @Test fun sectionShowsOnlyPending() {
+        val deck = DeckParser.parse(sample)   // Section 1 = 例文 1, 2
+        val progress = mapOf(
+            Keys.sentence(1) to Progress(due = 9, last = Rating.GOOD, interval = 8, lastDay = 1),
+        )
+        val qs = Planner(deck, progress, 2).build(Scope.Section(1), StudyMode.SELF, 20, 10)
+        assertEquals(listOf("s:2"), qs.map { it.key })   // 正解して予定がまだ先の文は出さない
+        val all = mapOf(Keys.sentence(1) to progress.getValue(Keys.sentence(1)), Keys.sentence(2) to Progress(due = 9, last = Rating.GOOD, lastDay = 1))
+        assertEquals(2, Planner(deck, all, 2).build(Scope.Section(1), StudyMode.SELF, 20, 10).size)   // 何もなければ全部
+    }
+
     @Test fun srsReadsOldRecords() {
         val old = Progress(stage = 2, due = 10, last = Rating.GOOD, reps = 2)
         assertTrue(Srs.review(old, Rating.GOOD, Confidence.MID, 10).due - 10 >= 14)

@@ -27,10 +27,28 @@ object Srs {
     private fun lastInterval(p: Progress): Int =
         if (p.interval > 0) p.interval else LEGACY[p.stage.coerceIn(0, LEGACY.size - 1)]
 
-    data class Plan(val interval: Int, val ease: Float)
+    /** interval: 次に出るまでの日数、stored: 次の計算の元にする間隔 */
+    data class Plan(val interval: Int, val ease: Float, val stored: Int = interval)
 
-    fun plan(current: Progress?, rating: Rating, confidence: Confidence?): Plan {
+    /**
+     * [today] を渡すと「期限より前に復習した」場合を考える。
+     * 予定より早く正解しても、間隔が伸びすぎないように、実際に空いた日数を元に計算し、
+     * もとの予定日より前には戻さない（その日のうちのやり直しなら予定はそのまま）。
+     */
+    fun plan(current: Progress?, rating: Rating, confidence: Confidence?, today: Long? = null): Plan {
         val p = current ?: Progress()
+        val early = today != null && current != null && p.lastDay >= 0 && p.due > today && rating != Rating.WEAK
+        if (early) {
+            val elapsed = (today!! - p.lastDay).toInt()
+            val remaining = (p.due - today).toInt()
+            if (elapsed <= 0 && rating != Rating.HARD) return Plan(remaining, p.ease, stored = lastInterval(p))
+            val fromElapsed = plan(p.copy(interval = maxOf(elapsed, 1), stage = 0), rating, confidence)
+            return if (rating == Rating.HARD) fromElapsed.copy(interval = minOf(fromElapsed.interval, remaining))
+            else {
+                val days = maxOf(fromElapsed.interval, remaining)
+                Plan(days, p.ease, stored = maxOf(days, lastInterval(p)))
+            }
+        }
         val prev = lastInterval(p)
         var ease = p.ease
         if (rating == Rating.WEAK) {
@@ -62,11 +80,11 @@ object Srs {
 
     fun review(current: Progress?, rating: Rating, confidence: Confidence?, today: Long): Progress {
         val p = current ?: Progress()
-        val plan = plan(p, rating, confidence)
+        val plan = plan(current, rating, confidence, today)
         return p.copy(
             stage = when (rating) { Rating.WEAK -> 0; Rating.HARD -> p.stage; else -> p.stage + 1 },
             due = today + plan.interval,
-            interval = plan.interval,
+            interval = plan.stored,
             ease = plan.ease,
             last = rating,
             reps = p.reps + 1,
@@ -76,8 +94,8 @@ object Srs {
     }
 
     /** ボタンの下に出す「次はいつ」ラベル。 */
-    fun preview(current: Progress?, rating: Rating, confidence: Confidence?): String =
-        formatDays(plan(current, rating, confidence).interval)
+    fun preview(current: Progress?, rating: Rating, confidence: Confidence?, today: Long? = null): String =
+        formatDays(plan(current, rating, confidence, today).interval)
 
     fun formatDays(days: Int): String = when {
         days <= 1 -> "明日"

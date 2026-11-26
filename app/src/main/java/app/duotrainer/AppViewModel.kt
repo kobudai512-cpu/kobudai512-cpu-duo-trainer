@@ -212,7 +212,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             is Scope.Section -> "Section ${scope.section}"
             is Scope.Custom -> scope.title
         }
-        if (scope is Scope.Section) updateUser { it.copy(lastSection = scope.section) }
+        if (scope is Scope.Section) {
+            updateUser { it.copy(lastSection = scope.section) }
+            if (mode != StudyMode.WORD && p.sectionPending(scope.section).isEmpty())
+                toast("このセクションは今やるべき文がないので、全部を出します（予定より早い復習は間隔を伸ばしすぎません）")
+        }
         if (mode.isTranslation) updateUser { it.copy(translationMode = mode) }
         _state.update { it.copy(session = Session(title, qs, scope = scope, mode = mode)) }
         prefetchAudio(qs)
@@ -277,7 +281,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun preview(q: Question, rating: Rating, confidence: Confidence?): String =
-        if (q.relearn) "確認用（予定は明日）" else Srs.preview(_state.value.user.progress[q.key], rating, confidence)
+        if (q.relearn) "確認用（予定は明日）" else Srs.preview(_state.value.user.progress[q.key], rating, confidence, today)
 
     // ---------- ブックマーク ----------
 

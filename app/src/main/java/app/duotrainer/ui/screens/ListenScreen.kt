@@ -143,8 +143,9 @@ fun ListenScreen(state: UiState, vm: AppViewModel, back: () -> Unit) {
                 listOf(1, 2, 3).forEach { n ->
                     FilterChip(selected = st.repeat == n, onClick = { ListenController.setRepeat(n) }, label = { Text("${n}回") })
                 }
-                Spacer(Modifier.weight(1f))
-                Text("最後まで行ったら最初から", style = MaterialTheme.typography.labelSmall)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("最後まで行ったら最初から", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                 Switch(checked = st.loop, onCheckedChange = { ListenController.setLoop(it) })
             }
             Row(verticalAlignment = Alignment.CenterVertically) {

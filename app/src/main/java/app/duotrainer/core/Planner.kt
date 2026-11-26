@@ -49,6 +49,15 @@ class Planner(
     fun weakSentences(): List<Sentence> =
         deck.sentences.filter { progress[Keys.sentence(it.id)]?.last == Rating.WEAK }
 
+    /** セクションの中で今やるべき文（新しい文 → 苦手 → 期限が来た文）。 */
+    fun sectionPending(section: Int): List<Sentence> {
+        val inSec = deck.sentencesIn(section)
+        val news = inSec.filter { Keys.sentence(it.id) !in progress }
+        val weak = inSec.filter { progress[Keys.sentence(it.id)]?.last == Rating.WEAK }
+        val due = inSec.filter { progress[Keys.sentence(it.id)]?.let { p -> p.due <= today } ?: false }
+        return (news + weak + due).distinctBy { it.id }
+    }
+
     /** 今日すでに新しく覚え始めた数。 */
     fun newStartedToday(): Int = progress.count { (k, p) -> k.startsWith("s:") && p.reps == 1 && p.lastDay == today }
 
@@ -69,11 +78,9 @@ class Planner(
             }
             Scope.Weak -> weakSentences().shuffled(random).take(size)
             is Scope.Section -> {
-                val inSec = deck.sentencesIn(scope.section)
-                val due = inSec.filter { progress[Keys.sentence(it.id)]?.let { p -> p.due <= today } ?: false }
-                val news = inSec.filter { Keys.sentence(it.id) !in progress }
-                val rest = inSec - due.toSet() - news.toSet()
-                (news + due + rest).take(size)
+                // まだやっていない文と、復習の期限が来た文（苦手を含む）だけ。なければセクション全部
+                val pending = sectionPending(scope.section)
+                (pending.ifEmpty { deck.sentencesIn(scope.section) }).take(size)
             }
             is Scope.Custom -> scope.ids.mapNotNull(deck::sentence).shuffled(random).take(size)
         }
