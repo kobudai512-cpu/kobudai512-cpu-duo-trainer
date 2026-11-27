@@ -23,7 +23,8 @@ DUO 3.0 の例文を覚えるための**自分用** Android アプリ（Kotlin /
 - 例文 560・単語 2569・45 セクション。txt は Anki 書き出し（タブ区切り、単語行に `N SECTION` タグ、例文行はタグなし）。
 - 例文のセクションは単語との一致で推定（core/DeckParser.kt の Aligner）。単語→例文の対応 2562/2569。
   対応方式を変えたら `Aligner.VERSION` を上げる（起動時に保存済み教材を作り直す）。
-- ユーザーの手元の正しい txt は「DUO3.0_修正版4.txt」（誤字修正、Section 44 の順番を本どおりに修正済み。版4 で have endure→endured、No pleasure→No please）。
+- ユーザーの手元の正しい txt は「DUO3.0_修正版5.txt」（誤字修正、Section 44 の順番を本どおりに修正済み。版4 で have endure→endured、No pleasure→No please、版5 で 情報酌量→情状酌量）。
+  版5 からアプリで使わない列（[sound:...] の列）と `#separator` `#html` の行を削除。1 行 = 英語 \t 日本語 \t タグ、先頭に `#tags column:3`（パーサーは両方の形式を読める）。
   残っている問題: **No.199 が No.560 の重複**（本の No.199 の文が欠けている。ユーザーから写真をもらえば差し替え）。
 - 読み込み直したとき、学習記録と★は英文で照らし合わせて新しい番号に移す（AppViewModel.remapProgress）。
 - CD 音声: 1 トラック = 1 セクション。無音で 1 文ずつ分割（core/Segmenter.kt）。冒頭の「Section N」を 1 つ飛ばす、文末 +0.7 秒。
