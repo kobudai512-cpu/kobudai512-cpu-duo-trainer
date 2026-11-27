@@ -97,6 +97,28 @@ class CoreTest {
         assertTrue(r2.parts.any { it.kind == TextUtil.DiffKind.MISSING && it.text == "up" })
     }
 
+    @Test fun diffAcceptsBothFormsOfContractions() {
+        // he's = he is / he has、I'd = I would / I had、let's = let us、it's = it is
+        assertTrue(TextUtil.diff("He's a good student.", "He is a good student.").isPerfect)
+        assertTrue(TextUtil.diff("He is a good student.", "He's a good student.").isPerfect)
+        assertTrue(TextUtil.diff("She's been to Paris twice.", "She has been to Paris twice.").isPerfect)
+        assertTrue(TextUtil.diff("It's raining.", "It is raining.").isPerfect)
+        assertTrue(TextUtil.diff("That's right.", "That is right.").isPerfect)
+        assertTrue(TextUtil.diff("There's a cat.", "There is a cat.").isPerfect)
+        assertTrue(TextUtil.diff("Let's go.", "Let us go.").isPerfect)
+        assertTrue(TextUtil.diff("I'd like some tea.", "I would like some tea.").isPerfect)
+        assertTrue(TextUtil.diff("You'd better hurry.", "You had better hurry.").isPerfect)
+        assertTrue(TextUtil.diff("He doesn't know.", "He does not know.").isPerfect)
+        assertTrue(TextUtil.diff("You're late.", "You are late.").isPerfect)
+        // 所有格はそのまま（John's を John is にはしない）
+        assertTrue(!TextUtil.diff("John's car is red.", "John is car is red.").isPerfect)
+        // 表示は is / has のどちらか 1 語
+        val miss = TextUtil.diff("He's been busy.", "He been busy.")
+        assertTrue(miss.parts.any { it.kind == TextUtil.DiffKind.MISSING && it.text == "has" })
+        assertTrue(TextUtil.onlyMinorErrors(miss))
+        assertTrue(TextUtil.sameWord("it's", "it is"))
+    }
+
     @Test fun diffHandlesTyposAndSpeech() {
         val e = "After making sure she was sound asleep, he crept out of the room and set off."
         assertTrue(TextUtil.diff(e, "after making sure she was sound asleep he crept out of the room and set off").isPerfect)

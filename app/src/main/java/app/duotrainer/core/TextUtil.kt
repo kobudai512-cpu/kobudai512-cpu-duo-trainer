@@ -249,20 +249,62 @@ object TextUtil {
     private val CONTRACTIONS = listOf(
         "won't" to "will not", "can't" to "can not", "cannot" to "can not",
         "shan't" to "shall not", "n't" to " not", "'m" to " am", "'re" to " are",
-        "'ll" to " will", "'ve" to " have", "'d" to " would",
+        "'ll" to " will", "'ve" to " have",
     )
 
-    /** 比較用に正規化した単語列。大文字小文字・句読点・短縮形の差は無視する。 */
+    /** 's が is / has の短縮になる語（John's のような所有格は対象外）。 */
+    private val S_IS = setOf(
+        "he", "she", "it", "that", "what", "there", "here", "who", "where", "how", "when", "why",
+        "everyone", "everybody", "everything", "someone", "somebody", "something",
+        "nobody", "nothing", "one",
+    )
+    private val PRONOUNS_D = setOf("i", "you", "he", "she", "it", "we", "they", "that", "who", "there", "what", "where")
+
+    /** 's / 'd の後ろがこの語なら has / had の短縮として先に出す（He's been ... / I'd better ...）。 */
+    private val HAS_NEXT = setOf("been", "got", "gotten", "had", "done", "gone", "seen", "taken", "given", "made", "better")
+
+    /**
+     * 比較用に正規化した単語列。大文字小文字・句読点・短縮形の差は無視する。
+     * he's（is / has）や I'd（would / had）のようにどちらとも読める短縮は
+     * "is|has" のように候補を | でつないだ 1 語にする（どちらで書いても正解）。
+     */
     fun normalizeWords(s: String): List<String> {
         var t = s.lowercase()
             .replace('’', '\'').replace('‘', '\'')
             .replace('“', ' ').replace('”', ' ')
         for ((a, b) in CONTRACTIONS) t = t.replace(a, b)
-        return t.replace(Regex("[^a-z0-9' ]"), " ")
+        val raw = t.replace(Regex("[^a-z0-9' ]"), " ")
             .split(' ')
             .map { it.trim('\'') }
             .filter { it.isNotBlank() }
+        val out = mutableListOf<String>()
+        for ((i, w) in raw.withIndex()) {
+            val next = raw.getOrNull(i + 1)
+            val hasFirst = next in HAS_NEXT
+            when {
+                w == "let's" -> { out += "let"; out += "us" }
+                w.endsWith("'s") && w.dropLast(2) in S_IS -> {
+                    out += w.dropLast(2); out += if (hasFirst) "has|is" else "is|has"
+                }
+                w.endsWith("'d") && w.dropLast(2) in PRONOUNS_D -> {
+                    out += w.dropLast(2); out += if (hasFirst) "had|would" else "would|had"
+                }
+                else -> out += w
+            }
+        }
+        return out
     }
+
+    /** 正規化した 2 語が同じか（"is|has" と "is" は同じ）。 */
+    fun sameNormalized(x: String, y: String): Boolean {
+        if (x == y) return true
+        if ('|' !in x && '|' !in y) return false
+        val xs = x.split('|')
+        return y.split('|').any { it in xs }
+    }
+
+    /** 画面に出すときの形（候補が複数あれば 1 つめ）。 */
+    private fun display(w: String) = w.substringBefore('|')
 
     /** MATCH 一致 / MISSING 抜け / EXTRA 余分 / TYPO つづり違い（text が正しい語、wrote が書いた語） */
     enum class DiffKind { MATCH, MISSING, EXTRA, TYPO }
@@ -305,7 +347,7 @@ object TextUtil {
         val e = normalizeWords(expected)
         val a = normalizeWords(answer)
         if (e.isEmpty()) return DiffResult(emptyList(), if (a.isEmpty()) 1f else 0f)
-        fun same(x: String, y: String) = x == y || (spoken && soundsAlike(x, y))
+        fun same(x: String, y: String) = sameNormalized(x, y) || (spoken && soundsAlike(display(x), display(y)))
         val dp = Array(e.size + 1) { IntArray(a.size + 1) }
         for (i in e.indices.reversed()) for (j in a.indices.reversed()) {
             dp[i][j] = if (same(e[i], a[j])) dp[i + 1][j + 1] + 1 else maxOf(dp[i + 1][j], dp[i][j + 1])
@@ -315,10 +357,10 @@ object TextUtil {
         while (i < e.size || j < a.size) {
             when {
                 i < e.size && j < a.size && same(e[i], a[j]) && dp[i][j] == dp[i + 1][j + 1] + 1 -> {
-                    raw += DiffPart(e[i], DiffKind.MATCH); i++; j++
+                    raw += DiffPart(display(e[i]), DiffKind.MATCH); i++; j++
                 }
-                j < a.size && (i == e.size || dp[i][j + 1] >= dp[i + 1][j]) -> { raw += DiffPart(a[j], DiffKind.EXTRA); j++ }
-                else -> { raw += DiffPart(e[i], DiffKind.MISSING); i++ }
+                j < a.size && (i == e.size || dp[i][j + 1] >= dp[i + 1][j]) -> { raw += DiffPart(display(a[j]), DiffKind.EXTRA); j++ }
+                else -> { raw += DiffPart(display(e[i]), DiffKind.MISSING); i++ }
             }
         }
         // となり合った「余分」と「抜け」が似た語なら、つづり違いとしてまとめる
@@ -355,8 +397,11 @@ object TextUtil {
     }
 
     /** 1 語の答え合わせ（穴埋め用）。 */
-    fun sameWord(expected: String, answer: String): Boolean =
-        normalizeWords(expected) == normalizeWords(answer)
+    fun sameWord(expected: String, answer: String): Boolean {
+        val e = normalizeWords(expected)
+        val a = normalizeWords(answer)
+        return e.size == a.size && e.indices.all { sameNormalized(e[it], a[it]) }
+    }
 
     /** 語順パズル用のチップ。句読点は直前の単語にくっつけたまま分ける。 */
     fun puzzlePieces(sentence: String): List<String> =
